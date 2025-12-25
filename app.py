@@ -2,84 +2,93 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import csv
 import os
 from datetime import datetime
 
-# =======================
+# ==================================================
 # CONFIG
-# =======================
-QUESTIONS_FILE = "questions_ici.xlsx"
-INVITES_FILE = "invites.csv"
-RESULTATS_FILE = "resultats_innovation.csv"
-
+# ==================================================
 st.set_page_config(
-    page_title="Indice de Culture de l’Innovation – ICI",
+    page_title="Indice de Culture de l'Innovation (ICI)",
     layout="centered"
 )
 
-# =======================
-# UTILS
-# =======================
-def safe_read_csv(path):
-    if not os.path.exists(path) or os.stat(path).st_size == 0:
-        return pd.DataFrame()
-    return pd.read_csv(path)
+INVITES_FILE = "invites.csv"
+RESULTATS_FILE = "resultats_innovation.csv"
 
-def clean_columns(df):
-    df.columns = (
-        df.columns
-        .astype(str)
-        .str.strip()
-        .str.lower()
-        .str.replace(" ", "_")
-    )
-    return df
-
-def get_maturity_level(score, df_interp):
-    for _, row in df_interp.iterrows():
-        if row["min"] <= score <= row["max"]:
-            return row["niveau"], row["description"]
-    return "Inconnu", ""
-
-# =======================
-# LOAD QUESTIONS
-# =======================
-try:
-    df_q = pd.read_excel(QUESTIONS_FILE, sheet_name="questions")
-    df_interp = pd.read_excel(QUESTIONS_FILE, sheet_name="interpretation")
-except Exception:
-    st.error("❌ Impossible de charger questions_ici.xlsx")
-    st.stop()
-
-df_q = clean_columns(df_q)
-df_interp = clean_columns(df_interp)
-
-required_cols = {"axe", "code", "question"}
-if not required_cols.issubset(df_q.columns):
-    st.error("❌ Colonnes manquantes dans l’onglet questions")
-    st.write("Colonnes détectées :", list(df_q.columns))
-    st.stop()
-
-axes_data = {
-    axe: df_q[df_q["axe"] == axe]["code"].tolist()
-    for axe in df_q["axe"].unique()
-}
-
-questions_sequence = df_q.to_dict("records")
-
-# =======================
-# SESSION
-# =======================
+# ==================================================
+# SESSION STATE
+# ==================================================
 if "step" not in st.session_state:
     st.session_state.step = 0
+if "current_q" not in st.session_state:
+    st.session_state.current_q = 0
 if "responses" not in st.session_state:
     st.session_state.responses = {}
-if "q_index" not in st.session_state:
-    st.session_state.q_index = 0
+if "invite" not in st.session_state:
+    st.session_state.invite = None
 
-# =======================
-# STEP 0 – AUTH
-# =======================
+# ==================================================
+# QUESTIONNAIRE
+# ==================================================
+axes_data = {
+    "Audace": ["Q1", "Q2", "Q3"],
+    "Curiosité": ["Q4", "Q5", "Q6"],
+    "Agilité": ["Q7", "Q8", "Q9"],
+    "Énergie": ["Q10", "Q11", "Q12"]
+}
+
+questions_text = {
+    "Q1": "Si je tente une nouvelle approche et que ça ne marche pas, mon manager considère cela comme un apprentissage.",
+    "Q2": "Dans mon équipe, on encourage les idées originales.",
+    "Q3": "Je me sens à l’aise pour exprimer une opinion différente.",
+    "Q4": "Nous observons régulièrement ce que font nos concurrents.",
+    "Q5": "Chaque collaborateur peut apporter une idée majeure.",
+    "Q6": "Les échanges inter-départements sont encouragés.",
+    "Q7": "On cherche une solution plutôt qu’un coupable.",
+    "Q8": "Nous changeons rapidement nos habitudes si nécessaire.",
+    "Q9": "« On a toujours fait comme ça » est rare ici.",
+    "Q10": "Je sais vers qui me tourner pour tester une idée.",
+    "Q11": "Les informations sont partagées librement.",
+    "Q12": "La direction croit en notre capacité à innover."
+}
+
+questions_sequence = [(axe, q) for axe in axes_data for q in axes_data[axe]]
+
+# ==================================================
+# FONCTIONS
+# ==================================================
+def verifier_acces(email, code):
+    with open(INVITES_FILE, encoding="utf-8") as f:
+        for p in csv.DictReader(f):
+            if p["email"].lower() == email.lower() and p["code"] == code:
+                return p
+    return None
+
+def marquer_repondu(email):
+    rows = []
+    with open(INVITES_FILE, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    for r in rows:
+        if r["email"].lower() == email.lower():
+            r["statut"] = "OUI"
+            r["date_reponse"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+    with open(INVITES_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+def archiver(data):
+    df = pd.DataFrame([data])
+    if not os.path.exists(RESULTATS_FILE):
+        df.to_csv(RESULTATS_FILE, index=False)
+    else:
+        df.to_csv(RESULTATS_FILE, mode="a", header=False, index=False)
+
+# ==================================================
+# STEP 0 – AUTHENTIFICATION
+# ==================================================
 if st.session_state.step == 0:
     st.title("🔐 Accès au diagnostic ICI")
 
@@ -87,149 +96,130 @@ if st.session_state.step == 0:
     code = st.text_input("Mot de passe", type="password")
 
     if st.button("Se connecter"):
-        df_inv = pd.read_csv(INVITES_FILE)
-        df_inv = clean_columns(df_inv)
-
-        user = df_inv[
-            (df_inv.email.str.lower() == email.lower()) &
-            (df_inv.code == code)
-        ]
-
-        if user.empty:
-            st.error("Accès refusé")
-        else:
-            user = user.iloc[0]
-            st.session_state.user = user
-
-            if user.admin == "oui":
-                st.info("Accès administrateur")
+        personne = verifier_acces(email, code)
+        if personne:
+            st.session_state.invite = personne
+            if personne["admin"] == "OUI":
+                st.info("🛠 Accès administrateur détecté")
                 st.session_state.step = 99
             else:
-                st.session_state.step = 1
+                st.session_state.step = 10
             st.rerun()
+        else:
+            st.error("Accès refusé")
 
-# =======================
-# STEP 1 – QUESTIONNAIRE
-# =======================
-elif st.session_state.step == 1:
-    q = questions_sequence[st.session_state.q_index]
-
-    st.subheader(f"Axe : {q['axe']}")
-    st.write(q["question"])
-
-    st.session_state.responses[q["code"]] = st.select_slider(
-        "Votre réponse",
-        [1, 2, 3, 4, 5],
-        format_func=lambda x: [
-            "Pas du tout d’accord",
-            "Pas d’accord",
-            "Neutre",
-            "D’accord",
-            "Tout à fait"
-        ][x - 1],
-        key=q["code"]
+# ==================================================
+# STEP 10 – PAGE DE LANCEMENT
+# ==================================================
+elif st.session_state.step == 10:
+    st.markdown("## 🚀 Comment respire notre culture ?")
+    st.markdown(
+        "Participez au baromètre anonyme pour mesurer "
+        "l’indice de culture de l’innovation (ICI)."
     )
 
-    st.progress((st.session_state.q_index + 1) / len(questions_sequence))
+    if st.button("▶️ Démarrer le test"):
+        st.session_state.step = 1
+        st.rerun()
+
+    if st.button("⬅️ Retour à l’authentification"):
+        st.session_state.clear()
+        st.session_state.step = 0
+        st.rerun()
+
+# ==================================================
+# STEP 1 – QUESTIONS
+# ==================================================
+elif st.session_state.step == 1:
+    axe, q = questions_sequence[st.session_state.current_q]
+
+    st.subheader(f"🧩 Axe : {axe}")
+    st.write(questions_text[q])
+
+    st.session_state.responses[q] = st.select_slider(
+        "Votre réponse",
+        [1,2,3,4,5],
+        format_func=lambda x: ["Pas du tout d’accord","Pas d’accord","Neutre","D’accord","Tout à fait"][x-1],
+        key=q
+    )
+
+    st.progress((st.session_state.current_q + 1) / len(questions_sequence))
 
     if st.button("Suivant"):
-        if st.session_state.q_index < len(questions_sequence) - 1:
-            st.session_state.q_index += 1
+        if st.session_state.current_q < len(questions_sequence) - 1:
+            st.session_state.current_q += 1
         else:
             st.session_state.step = 2
         st.rerun()
 
-# =======================
-# STEP 2 – RESULTATS USER
-# =======================
+# ==================================================
+# STEP 2 – RÉSULTATS (NON ADMIN)
+# ==================================================
 elif st.session_state.step == 2:
+    st.markdown("## 🎉 Vos résultats ICI")
+
     r = st.session_state.responses
+    scores = {axe: sum(r[q] for q in qs)/3 for axe, qs in axes_data.items()}
+    ici = sum(scores.values()) / 4 * 20
 
-    scores_axes = {
-        axe: sum(r[q] for q in qs) / len(qs)
-        for axe, qs in axes_data.items()
-    }
-
-    ici = round(sum(scores_axes.values()) / len(scores_axes) * 20, 1)
-    niveau, desc = get_maturity_level(ici, df_interp)
-
-    df_out = pd.DataFrame([{
-        "email": st.session_state.user.email,
-        "filiale": st.session_state.user.filiale,
+    marquer_repondu(st.session_state.invite["email"])
+    archiver({
+        "email": st.session_state.invite["email"],
         **r,
-        **scores_axes,
-        "ici": ici,
-        "niveau": niveau,
+        **scores,
+        "ICI": round(ici,2),
         "date": datetime.now().strftime("%d/%m/%Y %H:%M")
-    }])
+    })
 
-    if os.path.exists(RESULTATS_FILE) and os.stat(RESULTATS_FILE).st_size > 0:
-        df_out.to_csv(RESULTATS_FILE, mode="a", header=False, index=False)
-    else:
-        df_out.to_csv(RESULTATS_FILE, index=False)
-
-    st.success(f"Score ICI : {ici}/100 – {niveau}")
-    st.info(desc)
+    st.success(f"🌱 Indice ICI : **{ici:.0f}/100**")
 
     # Radar
-    fig = go.Figure(go.Scatterpolar(
-        r=list(scores_axes.values()) + [list(scores_axes.values())[0]],
-        theta=list(scores_axes.keys()) + [list(scores_axes.keys())[0]],
-        fill="toself"
+    fig_radar = go.Figure(go.Scatterpolar(
+        r=list(scores.values()) + [list(scores.values())[0]],
+        theta=list(scores.keys()) + [list(scores.keys())[0]],
+        fill='toself'
     ))
-    fig.update_layout(polar=dict(radialaxis=dict(range=[0, 5])))
-    st.plotly_chart(fig)
+    fig_radar.update_layout(
+        polar=dict(radialaxis=dict(range=[0,5])),
+        showlegend=False
+    )
+    st.plotly_chart(fig_radar, use_container_width=True)
 
     # Histogramme
-    st.subheader("📊 Détail des scores par axe")
-    st.bar_chart(pd.DataFrame(scores_axes, index=["Score"]).T)
+    df_axes = pd.DataFrame({
+        "Axe": list(scores.keys()),
+        "Score": list(scores.values())
+    })
+    fig_bar = px.bar(df_axes, x="Axe", y="Score", range_y=[0,5])
+    st.plotly_chart(fig_bar, use_container_width=True)
 
-    if st.button("⬅ Retour à l’accueil"):
+    if st.button("⬅️ Retour à l’authentification"):
+        st.session_state.clear()
         st.session_state.step = 0
-        st.session_state.responses = {}
-        st.session_state.q_index = 0
         st.rerun()
 
-# =======================
+# ==================================================
 # STEP 99 – DASHBOARD ADMIN
-# =======================
+# ==================================================
 elif st.session_state.step == 99:
     st.title("📊 Dashboard Administrateur – ICI")
 
-    df_inv = clean_columns(pd.read_csv(INVITES_FILE))
-    df_res = safe_read_csv(RESULTATS_FILE)
-    if not df_res.empty:
-        df_res = clean_columns(df_res)
+    df_inv = pd.read_csv(INVITES_FILE)
+    df_res = pd.read_csv(RESULTATS_FILE) if os.path.exists(RESULTATS_FILE) else pd.DataFrame()
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1,col2,col3 = st.columns(3)
     col1.metric("Invités", len(df_inv))
-    col2.metric("Réponses", len(df_res))
-    col3.metric("Filiales", df_inv.filiale.nunique())
-    col4.metric(
-        "Score moyen",
-        f"{df_res.ici.mean():.1f}" if not df_res.empty else "—"
-    )
+    col2.metric("Réponses", len(df_inv[df_inv.statut=="OUI"]))
+    col3.metric("Taux", f"{round(len(df_inv[df_inv.statut=='OUI'])/len(df_inv)*100,1)} %")
+
+    st.subheader("📋 Suivi des invités")
+    st.dataframe(df_inv, use_container_width=True)
 
     if not df_res.empty:
-        st.subheader("📈 ICI moyen par filiale")
-        fig = px.bar(
-            df_res.groupby("filiale")["ici"].mean().reset_index(),
-            x="filiale", y="ici"
-        )
-        st.plotly_chart(fig)
+        st.subheader("📈 Résultats")
+        st.dataframe(df_res, use_container_width=True)
 
-        st.subheader("📊 Répartition des niveaux de maturité")
-        st.plotly_chart(px.histogram(df_res, x="niveau"))
-
-    st.subheader("📋 Données détaillées")
-    st.dataframe(df_res, use_container_width=True)
-
-    st.download_button(
-        "⬇ Export résultats",
-        df_res.to_csv(index=False),
-        "resultats_ici.csv"
-    )
-
-    if st.button("⬅ Retour authentification"):
+    if st.button("⬅️ Déconnexion"):
+        st.session_state.clear()
         st.session_state.step = 0
         st.rerun()
