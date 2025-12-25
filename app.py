@@ -16,6 +16,24 @@ st.set_page_config(
 
 INVITES_FILE = "invites.csv"
 RESULTATS_FILE = "resultats_innovation.csv"
+QUESTIONS_FILE = "questions_ici.xlsx"
+
+# ==================================================
+# CHARGEMENT DES QUESTIONS
+# ==================================================
+df_q = pd.read_excel(QUESTIONS_FILE, sheet_name="questions")
+
+axes_data = {
+    axe: df_q[df_q["axe"] == axe]["id"].tolist()
+    for axe in df_q["axe"].unique()
+}
+
+questions_text = {
+    row["id"]: row["question"]
+    for _, row in df_q.iterrows()
+}
+
+questions_sequence = [(row["axe"], row["id"]) for _, row in df_q.iterrows()]
 
 # ==================================================
 # SESSION STATE
@@ -28,33 +46,6 @@ if "responses" not in st.session_state:
     st.session_state.responses = {}
 if "invite" not in st.session_state:
     st.session_state.invite = None
-
-# ==================================================
-# QUESTIONNAIRE
-# ==================================================
-axes_data = {
-    "Audace": ["Q1", "Q2", "Q3"],
-    "Curiosité": ["Q4", "Q5", "Q6"],
-    "Agilité": ["Q7", "Q8", "Q9"],
-    "Énergie": ["Q10", "Q11", "Q12"]
-}
-
-questions_text = {
-    "Q1": "Si je tente une nouvelle approche et que ça ne marche pas, mon manager considère cela comme un apprentissage.",
-    "Q2": "Dans mon équipe, on encourage les idées originales.",
-    "Q3": "Je me sens à l’aise pour exprimer une opinion différente.",
-    "Q4": "Nous observons régulièrement ce que font nos concurrents.",
-    "Q5": "Chaque collaborateur peut apporter une idée majeure.",
-    "Q6": "Les échanges inter-départements sont encouragés.",
-    "Q7": "On cherche une solution plutôt qu’un coupable.",
-    "Q8": "Nous changeons rapidement nos habitudes si nécessaire.",
-    "Q9": "« On a toujours fait comme ça » est rare ici.",
-    "Q10": "Je sais vers qui me tourner pour tester une idée.",
-    "Q11": "Les informations sont partagées librement.",
-    "Q12": "La direction croit en notre capacité à innover."
-}
-
-questions_sequence = [(axe, q) for axe in axes_data for q in axes_data[axe]]
 
 # ==================================================
 # FONCTIONS
@@ -139,7 +130,13 @@ elif st.session_state.step == 1:
     st.session_state.responses[q] = st.select_slider(
         "Votre réponse",
         [1,2,3,4,5],
-        format_func=lambda x: ["Pas du tout d’accord","Pas d’accord","Neutre","D’accord","Tout à fait"][x-1],
+        format_func=lambda x: [
+            "Pas du tout d’accord",
+            "Pas d’accord",
+            "Neutre",
+            "D’accord",
+            "Tout à fait"
+        ][x-1],
         key=q
     )
 
@@ -153,14 +150,19 @@ elif st.session_state.step == 1:
         st.rerun()
 
 # ==================================================
-# STEP 2 – RÉSULTATS (NON ADMIN)
+# STEP 2 – RÉSULTATS
 # ==================================================
 elif st.session_state.step == 2:
     st.markdown("## 🎉 Vos résultats ICI")
 
     r = st.session_state.responses
-    scores = {axe: sum(r[q] for q in qs)/3 for axe, qs in axes_data.items()}
-    ici = sum(scores.values()) / 4 * 20
+
+    scores = {
+        axe: sum(r[q] for q in qs) / len(qs)
+        for axe, qs in axes_data.items()
+    }
+
+    ici = sum(scores.values()) / len(scores) * 20
 
     marquer_repondu(st.session_state.invite["email"])
     archiver({
