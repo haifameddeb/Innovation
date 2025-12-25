@@ -9,8 +9,6 @@ from datetime import datetime
 # ==================================================
 # CONFIGURATION
 # ==================================================
-ADMIN_CODE = "ADMIN2025"
-
 st.set_page_config(
     page_title="Indice de Culture de l'Innovation (ICI)",
     layout="centered"
@@ -31,7 +29,7 @@ if "responses" not in st.session_state:
 # ==================================================
 axes_data = {
     "Audace": ["Q1", "Q2", "Q3"],
-    "Curiosité": ["Q4", "Q5", "Q6"],
+    "Curiosité": ["Q4", "Q5", "Q5"],
     "Agilité": ["Q7", "Q8", "Q9"],
     "Énergie": ["Q10", "Q11", "Q12"]
 }
@@ -70,14 +68,17 @@ def marquer_repondu(email):
     rows = []
     with open("invites.csv", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
+
     for r in rows:
         if r["email"].lower() == email.lower():
             r["statut"] = "OUI"
             r["date_reponse"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+
     with open("invites.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=rows[0].keys())
         writer.writeheader()
         writer.writerows(rows)
+
 
 def archiver(data):
     file = "resultats_innovation.csv"
@@ -98,43 +99,48 @@ if st.session_state.step == 0:
 
     if st.button("Accéder"):
         statut, personne = verifier_acces(email, code)
-        if statut == "OK":
+
+        if statut == "ADMIN":
+            st.session_state.invite = personne
+            st.session_state.step = 99
+            st.rerun()
+
+        elif statut == "OK":
             st.session_state.invite = personne
             st.session_state.step = 1
             st.rerun()
+
         elif statut == "DEJA":
             st.warning("Vous avez déjà répondu.")
+
         else:
             st.error("Accès refusé.")
-
-    st.divider()
-    admin = st.text_input("Code administrateur", type="password")
-    if st.button("Accès Admin"):
-        if admin == ADMIN_CODE:
-            st.session_state.step = 99
-            st.rerun()
-        else:
-            st.error("Code admin incorrect")
 
 # ==================================================
 # STEP 1 – QUESTIONS
 # ==================================================
 elif st.session_state.step == 1:
     axe, q = questions_sequence[st.session_state.current_q]
-    st.subheader(f"{axe}")
+    st.subheader(axe)
     st.write(questions_text[q])
 
     st.session_state.responses[q] = st.select_slider(
         "Votre réponse",
-        [1,2,3,4,5],
-        format_func=lambda x: ["Pas du tout d’accord","Pas d’accord","Neutre","D’accord","Tout à fait"][x-1],
+        [1, 2, 3, 4, 5],
+        format_func=lambda x: [
+            "Pas du tout d’accord",
+            "Pas d’accord",
+            "Neutre",
+            "D’accord",
+            "Tout à fait"
+        ][x - 1],
         key=q
     )
 
-    st.progress((st.session_state.current_q+1)/len(questions_sequence))
+    st.progress((st.session_state.current_q + 1) / len(questions_sequence))
 
     if st.button("Suivant"):
-        if st.session_state.current_q < len(questions_sequence)-1:
+        if st.session_state.current_q < len(questions_sequence) - 1:
             st.session_state.current_q += 1
         else:
             st.session_state.step = 2
@@ -146,16 +152,16 @@ elif st.session_state.step == 1:
 elif st.session_state.step == 2:
     r = st.session_state.responses
     scores = {
-        axe: sum(r[q] for q in qs)/3 for axe, qs in axes_data.items()
+        axe: sum(r[q] for q in qs) / 3 for axe, qs in axes_data.items()
     }
-    ici = sum(scores.values())/4*20
+    ici = sum(scores.values()) / 4 * 20
 
     marquer_repondu(st.session_state.invite["email"])
     archiver({
         "email": st.session_state.invite["email"],
         **r,
         **scores,
-        "ICI": round(ici,2),
+        "ICI": round(ici, 2),
         "date": datetime.now().strftime("%d/%m/%Y %H:%M")
     })
 
@@ -163,11 +169,11 @@ elif st.session_state.step == 2:
     st.metric("Indice ICI", f"{ici:.0f}")
 
     fig = go.Figure(go.Scatterpolar(
-        r=list(scores.values())+[list(scores.values())[0]],
-        theta=list(scores.keys())+[list(scores.keys())[0]],
-        fill='toself'
+        r=list(scores.values()) + [list(scores.values())[0]],
+        theta=list(scores.keys()) + [list(scores.keys())[0]],
+        fill="toself"
     ))
-    fig.update_layout(polar=dict(radialaxis=dict(range=[0,5])))
+    fig.update_layout(polar=dict(radialaxis=dict(range=[0, 5])))
     st.plotly_chart(fig)
 
 # ==================================================
@@ -179,35 +185,41 @@ elif st.session_state.step == 99:
     df_inv = pd.read_csv("invites.csv")
     df_res = pd.read_csv("resultats_innovation.csv") if os.path.exists("resultats_innovation.csv") else pd.DataFrame()
 
-    col1,col2,col3,col4 = st.columns(4)
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("Invités", len(df_inv))
-    col2.metric("Réponses", len(df_inv[df_inv.statut=="OUI"]))
-    col3.metric("En attente", len(df_inv[df_inv.statut=="NON"]))
-    col4.metric("Taux", f"{round(len(df_inv[df_inv.statut=='OUI'])/len(df_inv)*100,1)} %")
+    col2.metric("Réponses", len(df_inv[df_inv.statut == "OUI"]))
+    col3.metric("En attente", len(df_inv[df_inv.statut == "NON"]))
+    col4.metric("Taux", f"{round(len(df_inv[df_inv.statut == 'OUI']) / len(df_inv) * 100, 1)} %")
 
     st.subheader("📈 Évolution des réponses")
-    if not df_inv.empty:
+    if "date_reponse" in df_inv.columns:
         fig = px.histogram(df_inv, x="date_reponse")
         st.plotly_chart(fig)
 
     st.subheader("📋 Suivi des invités")
     st.dataframe(df_inv, use_container_width=True)
 
-    st.download_button("⬇️ Export invités (Excel)",
-        df_inv.to_csv(index=False), "suivi_invites.csv")
+    st.download_button(
+        "⬇️ Export invités (Excel)",
+        df_inv.to_csv(index=False),
+        "suivi_invites.csv"
+    )
 
     if not df_res.empty:
-        st.download_button("⬇️ Export résultats (Excel)",
-            df_res.to_csv(index=False), "resultats_ici.csv")
+        st.download_button(
+            "⬇️ Export résultats (Excel)",
+            df_res.to_csv(index=False),
+            "resultats_ici.csv"
+        )
 
     st.subheader("✉️ Relance – message prêt à envoyer")
-    non = df_inv[df_inv.statut=="NON"]
-    emails = ", ".join(non.email.tolist())
-    st.text_area("Emails à relancer", emails)
-    st.text_area("Message",
-        "Bonjour,\n\nNous vous invitons à compléter le diagnostic ICI.\nMerci par avance.\n")
+    non = df_inv[df_inv.statut == "NON"]
+    st.text_area("Emails à relancer", ", ".join(non.email.tolist()))
+    st.text_area(
+        "Message",
+        "Bonjour,\n\nNous vous invitons à compléter le diagnostic ICI.\nMerci par avance.\n"
+    )
 
     if st.button("⬅️ Retour accueil"):
         st.session_state.step = 0
         st.rerun()
-
