@@ -25,7 +25,7 @@ if "responses" not in st.session_state:
     st.session_state.responses = {}
 
 # ==================================================
-# QUESTIONNAIRE
+# QUESTIONNAIRE STRUCTURE
 # ==================================================
 axes_data = {
     "Audace": ["Q1", "Q2", "Q3"],
@@ -52,7 +52,7 @@ questions_text = {
 questions_sequence = [(axe, q) for axe in axes_data for q in axes_data[axe]]
 
 # ==================================================
-# FONCTIONS
+# FONCTIONS DATA
 # ==================================================
 def verifier_acces(email, code):
     with open("invites.csv", encoding="utf-8") as f:
@@ -89,7 +89,7 @@ def archiver(data):
         df.to_csv(file, mode="a", header=False, index=False)
 
 # ==================================================
-# STEP 0 – LOGIN UNIQUE
+# STEP 0 – LOGIN
 # ==================================================
 if st.session_state.step == 0:
     st.title("🔐 Accès au diagnostic ICI")
@@ -113,16 +113,19 @@ if st.session_state.step == 0:
 
         elif statut == "DEJA":
             st.warning("Vous avez déjà répondu au questionnaire.")
-
         else:
             st.error("Identifiants incorrects.")
 
 # ==================================================
-# STEP 1 – QUESTIONS
+# STEP 1 – QUESTIONS (UX AMÉLIORÉE)
 # ==================================================
 elif st.session_state.step == 1:
     axe, q = questions_sequence[st.session_state.current_q]
-    st.subheader(axe)
+    q_index = axes_data[axe].index(q) + 1
+
+    st.subheader(f"📌 Axe : {axe}")
+    st.caption(f"Question {q_index} / 3")
+
     st.write(questions_text[q])
 
     st.session_state.responses[q] = st.select_slider(
@@ -140,7 +143,7 @@ elif st.session_state.step == 1:
 
     st.progress((st.session_state.current_q + 1) / len(questions_sequence))
 
-    if st.button("Suivant"):
+    if st.button("Suivant ➡️"):
         if st.session_state.current_q < len(questions_sequence) - 1:
             st.session_state.current_q += 1
         else:
@@ -148,7 +151,7 @@ elif st.session_state.step == 1:
         st.rerun()
 
 # ==================================================
-# STEP 2 – RÉSULTATS
+# STEP 2 – RÉSULTATS INDIVIDUELS
 # ==================================================
 elif st.session_state.step == 2:
     r = st.session_state.responses
@@ -165,8 +168,8 @@ elif st.session_state.step == 2:
     })
 
     st.success(f"Score ICI : {ici:.0f}/100")
-    st.metric("Indice ICI", f"{ici:.0f}")
 
+    # Radar individuel
     fig = go.Figure(go.Scatterpolar(
         r=list(scores.values()) + [list(scores.values())[0]],
         theta=list(scores.keys()) + [list(scores.keys())[0]],
@@ -176,40 +179,37 @@ elif st.session_state.step == 2:
     st.plotly_chart(fig)
 
 # ==================================================
-# STEP 99 – DASHBOARD ADMIN
+# STEP 99 – DASHBOARD ADMIN AVANCÉ
 # ==================================================
 elif st.session_state.step == 99:
     st.title("📊 Dashboard Administrateur – ICI")
 
-    df_inv = pd.read_csv("invites.csv")
-    df_res = pd.read_csv("resultats_innovation.csv") if os.path.exists("resultats_innovation.csv") else pd.DataFrame()
+    df = pd.read_csv("resultats_innovation.csv")
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Invités", len(df_inv))
-    col2.metric("Réponses", len(df_inv[df_inv.statut == "OUI"]))
-    col3.metric("En attente", len(df_inv[df_inv.statut == "NON"]))
-    col4.metric("Taux de réponse", f"{round(len(df_inv[df_inv.statut == 'OUI']) / len(df_inv) * 100, 1)} %")
+    # Moyennes par axe
+    moyennes = df[list(axes_data.keys())].mean().reset_index()
+    moyennes.columns = ["Axe", "Score"]
 
-    st.subheader("📋 Suivi des invités")
-    st.dataframe(df_inv, use_container_width=True)
-
-    if not df_res.empty:
-        st.subheader("📈 Scores globaux")
-        fig = px.histogram(df_res, x="ICI", nbins=10)
-        st.plotly_chart(fig)
-
-    st.download_button(
-        "⬇️ Export invités (Excel)",
-        df_inv.to_csv(index=False),
-        "suivi_invites.csv"
+    st.subheader("📊 Moyenne par axe")
+    st.plotly_chart(
+        px.bar(moyennes, x="Axe", y="Score", range_y=[1, 5]),
+        use_container_width=True
     )
 
-    if not df_res.empty:
-        st.download_button(
-            "⬇️ Export résultats (Excel)",
-            df_res.to_csv(index=False),
-            "resultats_ici.csv"
-        )
+    st.subheader("🧭 Radar moyen global")
+    fig = go.Figure(go.Scatterpolar(
+        r=moyennes["Score"].tolist() + [moyennes["Score"].tolist()[0]],
+        theta=moyennes["Axe"].tolist() + [moyennes["Axe"].tolist()[0]],
+        fill="toself"
+    ))
+    fig.update_layout(polar=dict(radialaxis=dict(range=[0, 5])))
+    st.plotly_chart(fig)
+
+    st.download_button(
+        "⬇️ Export résultats (Excel)",
+        df.to_csv(index=False),
+        "resultats_ici.csv"
+    )
 
     if st.button("⬅️ Déconnexion"):
         st.session_state.step = 0
