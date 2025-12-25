@@ -101,7 +101,7 @@ if st.session_state.step == 0:
             user = user.iloc[0]
             st.session_state.user = user
 
-            if user.admin == "oui":
+            if str(user.admin).strip().lower() == "oui":
                 st.info("Accès administrateur")
                 st.session_state.step = 99
             else:
@@ -233,3 +233,4 @@ elif st.session_state.step == 99:
     if st.button("⬅ Retour authentification"):
         st.session_state.step = 0
         st.rerun()
+
