@@ -72,7 +72,7 @@ elif st.session_state.step == 99:
     df_inv = pd.read_csv(INVITES_FILE)
 
     if os.path.exists(RESULTATS_FILE) and os.path.getsize(RESULTATS_FILE) > 0:
-        df_res = pd.read_csv(RESULTATS_FILE)
+        df_res = pd.read_csv(RESULTATS_FILE) and os.path.getsize(RESULTATS_FILE) > 0:
     else:
         st.warning("Aucune réponse enregistrée")
         df_res = pd.DataFrame()
@@ -147,3 +147,4 @@ elif st.session_state.step == 99:
     if st.button("⬅️ Retour accueil"):
         st.session_state.step = 0
         st.rerun()
+
