@@ -29,7 +29,7 @@ if "responses" not in st.session_state:
 # ==================================================
 axes_data = {
     "Audace": ["Q1", "Q2", "Q3"],
-    "Curiosité": ["Q4", "Q5", "Q5"],
+    "Curiosité": ["Q4", "Q5", "Q6"],
     "Agilité": ["Q7", "Q8", "Q9"],
     "Énergie": ["Q10", "Q11", "Q12"]
 }
@@ -89,18 +89,19 @@ def archiver(data):
         df.to_csv(file, mode="a", header=False, index=False)
 
 # ==================================================
-# STEP 0 – ACCÈS
+# STEP 0 – LOGIN UNIQUE
 # ==================================================
 if st.session_state.step == 0:
     st.title("🔐 Accès au diagnostic ICI")
 
-    email = st.text_input("Email")
-    code = st.text_input("Code", type="password")
+    email = st.text_input("Adresse email")
+    code = st.text_input("Mot de passe", type="password")
 
-    if st.button("Accéder"):
+    if st.button("Se connecter"):
         statut, personne = verifier_acces(email, code)
 
         if statut == "ADMIN":
+            st.info("🛡️ Accès administrateur détecté")
             st.session_state.invite = personne
             st.session_state.step = 99
             st.rerun()
@@ -111,10 +112,10 @@ if st.session_state.step == 0:
             st.rerun()
 
         elif statut == "DEJA":
-            st.warning("Vous avez déjà répondu.")
+            st.warning("Vous avez déjà répondu au questionnaire.")
 
         else:
-            st.error("Accès refusé.")
+            st.error("Identifiants incorrects.")
 
 # ==================================================
 # STEP 1 – QUESTIONS
@@ -151,9 +152,7 @@ elif st.session_state.step == 1:
 # ==================================================
 elif st.session_state.step == 2:
     r = st.session_state.responses
-    scores = {
-        axe: sum(r[q] for q in qs) / 3 for axe, qs in axes_data.items()
-    }
+    scores = {axe: sum(r[q] for q in qs) / 3 for axe, qs in axes_data.items()}
     ici = sum(scores.values()) / 4 * 20
 
     marquer_repondu(st.session_state.invite["email"])
@@ -180,7 +179,7 @@ elif st.session_state.step == 2:
 # STEP 99 – DASHBOARD ADMIN
 # ==================================================
 elif st.session_state.step == 99:
-    st.title("📊 Dashboard Admin – ICI")
+    st.title("📊 Dashboard Administrateur – ICI")
 
     df_inv = pd.read_csv("invites.csv")
     df_res = pd.read_csv("resultats_innovation.csv") if os.path.exists("resultats_innovation.csv") else pd.DataFrame()
@@ -189,15 +188,15 @@ elif st.session_state.step == 99:
     col1.metric("Invités", len(df_inv))
     col2.metric("Réponses", len(df_inv[df_inv.statut == "OUI"]))
     col3.metric("En attente", len(df_inv[df_inv.statut == "NON"]))
-    col4.metric("Taux", f"{round(len(df_inv[df_inv.statut == 'OUI']) / len(df_inv) * 100, 1)} %")
-
-    st.subheader("📈 Évolution des réponses")
-    if "date_reponse" in df_inv.columns:
-        fig = px.histogram(df_inv, x="date_reponse")
-        st.plotly_chart(fig)
+    col4.metric("Taux de réponse", f"{round(len(df_inv[df_inv.statut == 'OUI']) / len(df_inv) * 100, 1)} %")
 
     st.subheader("📋 Suivi des invités")
     st.dataframe(df_inv, use_container_width=True)
+
+    if not df_res.empty:
+        st.subheader("📈 Scores globaux")
+        fig = px.histogram(df_res, x="ICI", nbins=10)
+        st.plotly_chart(fig)
 
     st.download_button(
         "⬇️ Export invités (Excel)",
@@ -212,14 +211,8 @@ elif st.session_state.step == 99:
             "resultats_ici.csv"
         )
 
-    st.subheader("✉️ Relance – message prêt à envoyer")
-    non = df_inv[df_inv.statut == "NON"]
-    st.text_area("Emails à relancer", ", ".join(non.email.tolist()))
-    st.text_area(
-        "Message",
-        "Bonjour,\n\nNous vous invitons à compléter le diagnostic ICI.\nMerci par avance.\n"
-    )
-
-    if st.button("⬅️ Retour accueil"):
+    if st.button("⬅️ Déconnexion"):
         st.session_state.step = 0
+        st.session_state.current_q = 0
+        st.session_state.responses = {}
         st.rerun()
