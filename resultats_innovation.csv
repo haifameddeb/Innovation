@@ -1,3 +1,4 @@
-﻿Date;Utilisateur;Audace;Curiosite;Agilite;Energie;Score_ICI;Q1;Q2;Q3;Q4;Q5;Q6;Q7;Q8;Q9;Q10;Q11;Q12
-25/12/2025 11:28;haifa;3.33;3.33;3.67;3.67;70.0;3;3;4;2;4;4;5;3;3;5;3;3
-25/12/2025 13:17;Haifa;70.0;3.0;3.33;3.67;4.0;3;2;4;3;4;3;4;2;5;4;4;4
+﻿email;filiale;q1;q2;q3;q4;q5;strategie;organisation;technologie;culture;ici;niveau;date
+admin@acn.tn;ACN;4;5;4;5;4;4.5;4.0;4.5;4.0;85.0;Avancé;25/12/2025 19:10
+user1@acn.tn;ACN;3;4;3;4;3;3.5;3.0;3.5;3.0;65.0;Moyen;25/12/2025 19:15
+user2@alifort.tn;ALIFORT;2;3;2;3;2;2.5;2.0;2.5;2.0;45.0;Faible;25/12/2025 19:20
