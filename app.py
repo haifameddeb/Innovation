@@ -183,7 +183,15 @@ elif st.session_state.step == 99:
     st.title("📊 Dashboard Administrateur – ICI")
 
     df_inv = pd.read_csv(INVITES_FILE)
+    if os.path.exists(RESULTATS_FILE) and os.path.getsize(RESULTATS_FILE) > 0:
     df_res = pd.read_csv(RESULTATS_FILE)
+else:
+    df_res = pd.DataFrame(columns=[
+        "email", "filiale",
+        *axes_data.keys(),
+        "ICI", "date"
+   
+
 
     df_full = df_res.merge(
         df_inv[["email", "filiale"]],
@@ -225,3 +233,4 @@ elif st.session_state.step == 99:
         st.session_state.clear()
         st.session_state.step = 0
         st.rerun()
+
