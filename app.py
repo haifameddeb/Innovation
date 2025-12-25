@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import csv
 import os
 from datetime import datetime
 
@@ -26,6 +25,16 @@ def safe_read_csv(path):
         return pd.DataFrame()
     return pd.read_csv(path)
 
+def clean_columns(df):
+    df.columns = (
+        df.columns
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .str.replace(" ", "_")
+    )
+    return df
+
 def get_maturity_level(score, df_interp):
     for _, row in df_interp.iterrows():
         if row["min"] <= score <= row["max"]:
@@ -38,13 +47,17 @@ def get_maturity_level(score, df_interp):
 try:
     df_q = pd.read_excel(QUESTIONS_FILE, sheet_name="questions")
     df_interp = pd.read_excel(QUESTIONS_FILE, sheet_name="interpretation")
-except Exception as e:
-    st.error("❌ Erreur chargement questions_ici.xlsx")
+except Exception:
+    st.error("❌ Impossible de charger questions_ici.xlsx")
     st.stop()
+
+df_q = clean_columns(df_q)
+df_interp = clean_columns(df_interp)
 
 required_cols = {"axe", "code", "question"}
 if not required_cols.issubset(df_q.columns):
     st.error("❌ Colonnes manquantes dans l’onglet questions")
+    st.write("Colonnes détectées :", list(df_q.columns))
     st.stop()
 
 axes_data = {
@@ -75,7 +88,12 @@ if st.session_state.step == 0:
 
     if st.button("Se connecter"):
         df_inv = pd.read_csv(INVITES_FILE)
-        user = df_inv[(df_inv.email.str.lower() == email.lower()) & (df_inv.code == code)]
+        df_inv = clean_columns(df_inv)
+
+        user = df_inv[
+            (df_inv.email.str.lower() == email.lower()) &
+            (df_inv.code == code)
+        ]
 
         if user.empty:
             st.error("Accès refusé")
@@ -83,7 +101,7 @@ if st.session_state.step == 0:
             user = user.iloc[0]
             st.session_state.user = user
 
-            if user.admin == "OUI":
+            if user.admin == "oui":
                 st.info("Accès administrateur")
                 st.session_state.step = 99
             else:
@@ -95,7 +113,8 @@ if st.session_state.step == 0:
 # =======================
 elif st.session_state.step == 1:
     q = questions_sequence[st.session_state.q_index]
-    st.subheader(q["axe"])
+
+    st.subheader(f"Axe : {q['axe']}")
     st.write(q["question"])
 
     st.session_state.responses[q["code"]] = st.select_slider(
@@ -139,7 +158,7 @@ elif st.session_state.step == 2:
         "filiale": st.session_state.user.filiale,
         **r,
         **scores_axes,
-        "ICI": ici,
+        "ici": ici,
         "niveau": niveau,
         "date": datetime.now().strftime("%d/%m/%Y %H:%M")
     }])
@@ -152,6 +171,7 @@ elif st.session_state.step == 2:
     st.success(f"Score ICI : {ici}/100 – {niveau}")
     st.info(desc)
 
+    # Radar
     fig = go.Figure(go.Scatterpolar(
         r=list(scores_axes.values()) + [list(scores_axes.values())[0]],
         theta=list(scores_axes.keys()) + [list(scores_axes.keys())[0]],
@@ -159,6 +179,10 @@ elif st.session_state.step == 2:
     ))
     fig.update_layout(polar=dict(radialaxis=dict(range=[0, 5])))
     st.plotly_chart(fig)
+
+    # Histogramme
+    st.subheader("📊 Détail des scores par axe")
+    st.bar_chart(pd.DataFrame(scores_axes, index=["Score"]).T)
 
     if st.button("⬅ Retour à l’accueil"):
         st.session_state.step = 0
@@ -172,28 +196,32 @@ elif st.session_state.step == 2:
 elif st.session_state.step == 99:
     st.title("📊 Dashboard Administrateur – ICI")
 
-    df_inv = pd.read_csv(INVITES_FILE)
+    df_inv = clean_columns(pd.read_csv(INVITES_FILE))
     df_res = safe_read_csv(RESULTATS_FILE)
+    if not df_res.empty:
+        df_res = clean_columns(df_res)
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Invités", len(df_inv))
     col2.metric("Réponses", len(df_res))
     col3.metric("Filiales", df_inv.filiale.nunique())
-    col4.metric("Score moyen", f"{df_res.ICI.mean():.1f}" if not df_res.empty else "—")
+    col4.metric(
+        "Score moyen",
+        f"{df_res.ici.mean():.1f}" if not df_res.empty else "—"
+    )
 
     if not df_res.empty:
-        st.subheader("📈 ICI par filiale")
+        st.subheader("📈 ICI moyen par filiale")
         fig = px.bar(
-            df_res.groupby("filiale")["ICI"].mean().reset_index(),
-            x="filiale", y="ICI"
+            df_res.groupby("filiale")["ici"].mean().reset_index(),
+            x="filiale", y="ici"
         )
         st.plotly_chart(fig)
 
-        st.subheader("📊 Répartition maturité")
-        fig2 = px.histogram(df_res, x="niveau")
-        st.plotly_chart(fig2)
+        st.subheader("📊 Répartition des niveaux de maturité")
+        st.plotly_chart(px.histogram(df_res, x="niveau"))
 
-    st.subheader("📋 Détails réponses")
+    st.subheader("📋 Données détaillées")
     st.dataframe(df_res, use_container_width=True)
 
     st.download_button(
