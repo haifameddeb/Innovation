@@ -11,7 +11,7 @@ from datetime import datetime
 # ============================
 INVITES_FILE = "invites.csv"
 RESULTATS_FILE = "resultats_innovation.csv"
-QUESTIONS_FILE = "questions.xlsx"
+QUESTIONS_FILE = "questions_ici.xlsx"
 
 st.set_page_config(
     page_title="Indice de Culture de l’Innovation (ICI)",
@@ -185,3 +185,4 @@ elif st.session_state.step == 99:
     if st.button("⬅️ Déconnexion"):
         st.session_state.step = 0
         st.rerun()
+
