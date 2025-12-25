@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import csv
 import os
 from datetime import datetime
 
@@ -16,7 +17,7 @@ st.set_page_config(
 # SESSION STATE
 # ==================================================
 if "step" not in st.session_state:
-    st.session_state.step = 1
+    st.session_state.step = 0
 
 if "current_q" not in st.session_state:
     st.session_state.current_q = 0
@@ -25,7 +26,7 @@ if "responses" not in st.session_state:
     st.session_state.responses = {}
 
 # ==================================================
-# QUESTIONS & AXES
+# DONNÉES QUESTIONNAIRE
 # ==================================================
 axes_data = {
     "Le Droit à l'Audace": ["Q1", "Q2", "Q3"],
@@ -55,6 +56,56 @@ TOTAL_QUESTIONS = len(questions_sequence)
 # ==================================================
 # FONCTIONS MÉTIER
 # ==================================================
+def verifier_acces(email, code):
+    with open("invites.csv", newline="", encoding="utf-8") as f:
+        invites = list(csv.DictReader(f))
+
+    for p in invites:
+        if p["email"].lower() == email.lower() and p["code"] == code:
+            if p["statut"] == "OUI":
+                return "DEJA_REPONDU", p
+            return "OK", p
+    return "REFUSE", None
+
+
+def marquer_comme_repondu(email):
+    rows = []
+    with open("invites.csv", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["email"].lower() == email.lower():
+                row["statut"] = "OUI"
+                row["date_reponse"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+            rows.append(row)
+
+    with open("invites.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def interpreter_score_ici(score):
+    if score < 50:
+        return "🟥 Culture Silotée / Prudente", (
+            "L’innovation est freinée par la peur du risque et un fonctionnement en silos."
+        )
+    elif score < 75:
+        return "🟧 Culture En Éveil", (
+            "Les bases de l’innovation existent, mais des blocages persistent."
+        )
+    return "🟩 Culture Innovante", (
+        "L’innovation est ancrée dans les réflexes collectifs."
+    )
+
+
+def analyse_par_axe(score):
+    if score < 3:
+        return "🔴 Axe fragile – prioritaire"
+    elif score < 4:
+        return "🟠 Axe à renforcer"
+    return "🟢 Axe solide"
+
+
 def archiver_reponse(data):
     filename = "resultats_innovation.csv"
     df = pd.DataFrame([data])
@@ -63,67 +114,47 @@ def archiver_reponse(data):
     else:
         df.to_csv(filename, mode="a", header=False, index=False, sep=";", encoding="utf-8-sig")
 
-def interpreter_score_ici(score):
-    if score < 50:
-        return "🟥 Culture Silotée / Prudente", (
-            "L'innovation est freinée par la peur du risque et un fonctionnement en silos. "
-            "Une transformation culturelle est nécessaire à court terme."
-        )
-    elif score < 75:
-        return "🟧 Culture En Éveil", (
-            "Les bases de l'innovation existent, mais des freins persistent. "
-            "Des actions ciblées peuvent accélérer la dynamique."
-        )
-    else:
-        return "🟩 Culture Innovante", (
-            "L'innovation est ancrée dans les réflexes collectifs. "
-            "L'organisation est prête à expérimenter et se transformer."
-        )
+# ==================================================
+# ÉTAPE 0 – ACCÈS SÉCURISÉ
+# ==================================================
+if st.session_state.step == 0:
+    st.title("🔐 Accès au diagnostic ICI")
+    email = st.text_input("Email professionnel")
+    code = st.text_input("Code d’accès", type="password")
 
-def analyse_par_axe(score):
-    if score < 3:
-        return "🔴 Axe fragile – prioritaire"
-    elif score < 4:
-        return "🟠 Axe à renforcer"
-    else:
-        return "🟢 Axe solide"
+    if st.button("Accéder au questionnaire"):
+        statut, personne = verifier_acces(email, code)
+
+        if statut == "REFUSE":
+            st.error("Accès refusé. Vérifiez vos informations.")
+        elif statut == "DEJA_REPONDU":
+            st.warning("Vous avez déjà répondu. Merci 🙏")
+        else:
+            st.session_state.invite = personne
+            st.session_state.step = 1
+            st.rerun()
 
 # ==================================================
 # ÉTAPE 1 – INTRODUCTION
 # ==================================================
-if st.session_state.step == 1:
+elif st.session_state.step == 1:
     st.markdown("## 🚀 Indice de Culture de l’Innovation (ICI)")
-    st.write(
-        "Ce diagnostic permet d’évaluer la **maturité de la culture d’innovation** "
-        "au sein de votre organisation."
-    )
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("⏱️ Durée", "3 minutes")
-    col2.metric("📊 Résultat", "Score /100")
-    col3.metric("🔒 Données", "Archivées")
-
-    st.divider()
-
-    nom = st.text_input("Votre nom ou département (pour l’archivage)")
-
-    if st.button("🚀 Démarrer le diagnostic"):
-        st.session_state.nom = nom
-        st.session_state.responses = {}
-        st.session_state.current_q = 0
+    st.write("Diagnostic rapide de la culture d’innovation.")
+    if st.button("Démarrer"):
         st.session_state.step = 2
+        st.session_state.current_q = 0
+        st.session_state.responses = {}
         st.rerun()
 
 # ==================================================
-# ÉTAPE 2 – QUESTIONS UNE À UNE
+# ÉTAPE 2 – QUESTIONS
 # ==================================================
 elif st.session_state.step == 2:
     axe, q_id = questions_sequence[st.session_state.current_q]
-
     st.markdown(f"### 📍 {axe}")
     st.write(questions_text[q_id])
 
-    response = st.select_slider(
+    st.session_state.responses[q_id] = st.select_slider(
         "Votre réponse",
         options=[1, 2, 3, 4, 5],
         format_func=lambda x: {
@@ -136,30 +167,17 @@ elif st.session_state.step == 2:
         key=q_id
     )
 
-    st.session_state.responses[q_id] = response
+    st.progress(int((st.session_state.current_q + 1) / TOTAL_QUESTIONS * 100))
 
-    progress = int((st.session_state.current_q + 1) / TOTAL_QUESTIONS * 100)
-    st.progress(progress)
-    st.caption(f"Question {st.session_state.current_q + 1} / {TOTAL_QUESTIONS}")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.session_state.current_q > 0 and st.button("⬅️ Précédent"):
-            st.session_state.current_q -= 1
-            st.rerun()
-
-    with col2:
-        if st.button("➡️ Suivant"):
-            if st.session_state.current_q < TOTAL_QUESTIONS - 1:
-                st.session_state.current_q += 1
-                st.rerun()
-            else:
-                st.session_state.step = 3
-                st.rerun()
+    if st.button("➡️ Suivant"):
+        if st.session_state.current_q < TOTAL_QUESTIONS - 1:
+            st.session_state.current_q += 1
+        else:
+            st.session_state.step = 3
+        st.rerun()
 
 # ==================================================
-# ÉTAPE 3 – RÉSULTATS & ANALYSE
+# ÉTAPE 3 – RÉSULTATS
 # ==================================================
 elif st.session_state.step == 3:
     r = st.session_state.responses
@@ -172,35 +190,27 @@ elif st.session_state.step == 3:
     }
 
     ici = (sum(scores.values()) / 4) * 20
+    niveau, message = interpreter_score_ici(ici)
 
-    # Archivage
-    data = {
+    marquer_comme_repondu(st.session_state.invite["email"])
+
+    archiver_reponse({
         "Date": datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "Utilisateur": st.session_state.nom,
+        "Utilisateur": st.session_state.invite["email"],
         "Score_ICI": round(ici, 2),
         **{k: round(v, 2) for k, v in scores.items()},
         **r
-    }
-    archiver_reponse(data)
+    })
 
-    # Résultats globaux
-    niveau, message = interpreter_score_ici(ici)
-
-    st.success("✅ Diagnostic enregistré")
-    st.metric("Indice Global ICI", f"{ici:.0f} / 100")
-    st.progress(int(ici))
-
+    st.success("✅ Merci pour votre participation")
+    st.metric("Indice ICI", f"{ici:.0f} / 100")
     st.markdown(f"### {niveau}")
     st.write(message)
 
-    st.divider()
-
-    # Analyse par axe
-    st.markdown("## 🔍 Analyse par Axe")
+    st.markdown("## 🔍 Analyse par axe")
     for axe, score in scores.items():
-        st.markdown(f"**{axe}** : {score:.2f} / 5 — {analyse_par_axe(score)}")
+        st.write(f"**{axe}** : {score:.2f} / 5 — {analyse_par_axe(score)}")
 
-    # Radar
     fig = go.Figure(
         data=go.Scatterpolar(
             r=list(scores.values()) + [list(scores.values())[0]],
@@ -208,23 +218,5 @@ elif st.session_state.step == 3:
             fill="toself"
         )
     )
-    fig.update_layout(
-        polar=dict(radialaxis=dict(range=[0, 5], visible=True)),
-        showlegend=False
-    )
+    fig.update_layout(polar=dict(radialaxis=dict(range=[0, 5])), showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
-
-    st.divider()
-
-    if os.path.exists("resultats_innovation.csv"):
-        with open("resultats_innovation.csv", "rb") as f:
-            st.download_button(
-                "📥 Télécharger l’historique complet",
-                f,
-                file_name="resultats_innovation.csv",
-                mime="text/csv"
-            )
-
-    if st.button("🔄 Refaire le diagnostic"):
-        st.session_state.step = 1
-        st.rerun()
