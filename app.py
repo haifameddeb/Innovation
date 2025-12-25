@@ -60,8 +60,11 @@ def verifier_acces(email, code):
     with open("invites.csv", encoding="utf-8") as f:
         for p in csv.DictReader(f):
             if p["email"].lower() == email.lower() and p["code"] == code:
+                if p.get("admin", "NON") == "OUI":
+                    return "ADMIN", p
                 return ("DEJA", p) if p["statut"] == "OUI" else ("OK", p)
     return "REFUSE", None
+
 
 def marquer_repondu(email):
     rows = []
@@ -207,3 +210,4 @@ elif st.session_state.step == 99:
     if st.button("⬅️ Retour accueil"):
         st.session_state.step = 0
         st.rerun()
+
