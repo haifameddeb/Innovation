@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import os
 
+from ICI_calcul import calcul_ici
+from ICI_affichage import afficher_resultats
+
 # =========================
 # CONFIG
 # =========================
@@ -60,7 +63,7 @@ def page_questionnaire():
     total_q = len(df_q)
 
     # =========================
-    # INITIALISATION ROBUSTE
+    # INITIALISATION SESSION (SPRINT 2)
     # =========================
     if "q_index" not in st.session_state:
         st.session_state.q_index = 0
@@ -71,23 +74,23 @@ def page_questionnaire():
     q_index = st.session_state.q_index
 
     # =========================
-    # HEADER
+    # HEADER (SPRINT 2)
     # =========================
     st.title("🧠 Diagnostic InnoMeter")
     st.caption(f"👤 Participant : {st.session_state.user.get('email')}")
     st.markdown("---")
 
     # =========================
-    # FIN QUESTIONNAIRE
+    # FIN QUESTIONNAIRE → AFFICHAGE RÉSULTAT
     # =========================
     if q_index >= total_q:
-        st.success("🎉 Merci pour votre participation !")
+
+        resultats = calcul_ici(st.session_state.responses)
+        afficher_resultats(resultats)
 
         st.markdown("""
-        Vos réponses ont bien été enregistrées.
-
-        Elles seront analysées de manière **strictement anonyme**
-        et uniquement à des fins d’amélioration collective.
+        ---
+        🔒 Vos réponses sont traitées de manière strictement anonyme.
         """)
 
         st.progress(1.0)
@@ -101,7 +104,7 @@ def page_questionnaire():
         return
 
     # =========================
-    # QUESTION COURANTE
+    # QUESTION COURANTE (SPRINT 2)
     # =========================
     row = df_q.iloc[q_index]
 
@@ -118,11 +121,11 @@ def page_questionnaire():
     st.markdown("<br>", unsafe_allow_html=True)
 
     # =========================
-    # QUESTION SUIVANTE (SAFE)
+    # QUESTION SUIVANTE (SPRINT 2)
     # =========================
     if st.button("➡️ Question suivante", use_container_width=True):
 
-        # 🔒 SÉCURITÉ ABSOLUE AVANT APPEND
+        # Sécurité absolue (Streamlit rerun)
         if "responses" not in st.session_state or not isinstance(st.session_state.responses, list):
             st.session_state.responses = []
 
@@ -137,11 +140,7 @@ def page_questionnaire():
         st.rerun()
 
     # =========================
-    # BARRE DE PROGRESSION (BAS)
+    # BARRE DE PROGRESSION (SPRINT 2)
     # =========================
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.progress((q_index + 1) / total_q)
-
-    from ICI_calcul import calcul_ici
-
-    resultats = calcul_ici(st.session_state.responses)
