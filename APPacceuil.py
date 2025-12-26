@@ -1,32 +1,54 @@
-st.markdown(
-div style=text-aligncenter; margin-top40px;
-    h1🔵 InnoMeterh1
-    h3Comment respire notre culture d’innovation h3
-    p style=font-size16px; color#555;
-        Participez au baromètre bInnoMeterb pour mesurerbr
-        l’indice de culture d’innovation (ICI) de notre organisation.
-    p
-div
-, unsafe_allow_html=True)
+import streamlit as st
 
-st.markdown(br, unsafe_allow_html=True)
+# =========================
+# CONFIG PAGE
+# =========================
+st.set_page_config(
+    page_title="InnoMeter – Accès",
+    page_icon="🔵",
+    layout="centered"
+)
 
-with st.container()
-    email = st.text_input(Email professionnel)
-    password = st.text_input(Mot de passe, type=password)
+# =========================
+# HEADER
+# =========================
+st.markdown("<br>", unsafe_allow_html=True)
 
-    st.markdown(br, unsafe_allow_html=True)
+st.title("🔵 InnoMeter")
+st.subheader("Le baromètre de la culture d’innovation")
 
-    if st.button(🚀 Démarrer le diagnostic, use_container_width=True)
-        # logique d’authentification existante
-        pass
+st.markdown("""
+<p style="font-size:16px; color:#555;">
+Comment respire notre culture d’innovation ?<br>
+Participez au baromètre <b>InnoMeter</b> pour mesurer l’indice de culture
+d’innovation (ICI) de notre organisation.
+</p>
+""", unsafe_allow_html=True)
 
-st.markdown(
-div style=text-aligncenter; margin-top30px; font-styleitalic; color#666;
+st.markdown("<br>", unsafe_allow_html=True)
+
+# =========================
+# FORMULAIRE DE CONNEXION
+# =========================
+with st.container():
+    email = st.text_input("📧 Email professionnel")
+    password = st.text_input("🔑 Mot de passe", type="password")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    if st.button("🚀 Démarrer le diagnostic", use_container_width=True):
+        # 👉 Ici tu branches TA logique d’authentification existante
+        st.success("Authentification en cours…")
+
+# =========================
+# CITATION & CONFIANCE
+# =========================
+st.markdown("""
+<div style="text-align:center; margin-top:40px; font-style:italic; color:#666;">
     « On n’améliore durablement que ce que l’on prend le temps de mesurer. »
-div
+</div>
 
-div style=text-aligncenter; margin-top10px; font-size12px; color#888;
-    🔒 Vos réponses sont anonymes et analysées uniquement de manière collective.
-div
-, unsafe_allow_html=True)
+<div style="text-align:center; margin-top:10px; font-size:12px; color:#888;">
+    🔒 Vos réponses sont anonymes et utilisées uniquement à des fins d’analyse collective.
+</div>
+""", unsafe_allow_html=True)
