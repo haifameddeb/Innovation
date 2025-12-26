@@ -69,12 +69,27 @@ def page_questionnaire():
             st.rerun()
 
     else:
+
         st.success("🎉 Merci pour votre participation !")
-        st.write(
-            "Vos réponses ont bien été enregistrées. "
-            "Elles seront analysées de manière strictement anonyme."
-        )
-        st.write("🗂️ Réponses collectées :", st.session_state.responses)
+    
+        st.markdown("""
+        Votre contribution a bien été enregistrée.
+    
+        Elle sera analysée de manière **strictement anonyme** et **agrégée**
+        avec l’ensemble des réponses collectées.
+    
+        Les résultats permettront d’identifier les leviers d’amélioration
+        de la **culture d’innovation** au sein de l’organisation.
+        """)
+    
+        st.markdown("<br>", unsafe_allow_html=True)
+    
+        if st.button("🏠 Retour à l’accueil", use_container_width=True):
+            # Nettoyage session (optionnel)
+            st.session_state.step = 0
+            st.session_state.q_index = 0
+            st.session_state.responses = {}
+            st.rerun()
 
     # =========================
     # BARRE DE PROGRESSION (TOUJOURS EN BAS)
@@ -83,3 +98,4 @@ def page_questionnaire():
 
     progress = min(q_index / total_q, 1.0)
     st.progress(progress)
+
