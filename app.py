@@ -1,7 +1,7 @@
 import streamlit as st
 
 # Import des pages (Sprints séparés)
-from APPacceuil import page_acceuil
+from APPacceuil import page_accueil
 from APPquestionnaire import page_questionnaire
 
 # =========================
@@ -49,6 +49,7 @@ else:
     # Sécurité : état inconnu → retour accueil
     st.session_state.step = 0
     st.rerun()
+
 
 
 
