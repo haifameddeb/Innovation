@@ -8,6 +8,7 @@ from datetime import datetime
 # =========================
 QUESTIONS_FILE = "questions_ici.xlsx"
 RESULTATS_FILE = "resultats_innovation.csv"
+INVITES_FILE = "invites.csv"
 
 # =========================
 # UTILS
@@ -27,19 +28,37 @@ def load_questions():
 
     required = {"axe", "code", "question"}
     if not required.issubset(df_q.columns):
-        st.error("❌ Colonnes manquantes dans l’onglet questions")
+        st.error("❌ Colonnes manquantes dans l’onglet questions.")
         st.stop()
 
     return df_q
+
+def check_invitation(email):
+    if not os.path.exists(INVITES_FILE):
+        st.error("❌ Fichier des invités introuvable.")
+        st.stop()
+
+    df_inv = pd.read_csv(INVITES_FILE, sep=";")
+    df_inv = clean_columns(df_inv)
+
+    return email.lower() in df_inv["email"].str.lower().values
 
 # =========================
 # PAGE QUESTIONNAIRE
 # =========================
 def page_questionnaire():
 
-    # 🔒 Sécurité : accès uniquement après auth
+    # =========================
+    # SÉCURITÉ D’ACCÈS
+    # =========================
     if "user" not in st.session_state:
         st.error("Accès non autorisé.")
+        st.stop()
+
+    email_user = st.session_state.user["email"]
+
+    if not check_invitation(email_user):
+        st.error("❌ Votre adresse email n’est pas autorisée à accéder au questionnaire.")
         st.stop()
 
     # =========================
@@ -57,17 +76,16 @@ def page_questionnaire():
     df_q = load_questions()
     questions = df_q.to_dict("records")
 
-    # Séquence par axe (pour le calcul)
     axes_data = {
         axe: df_q[df_q["axe"] == axe]["code"].tolist()
         for axe in df_q["axe"].unique()
     }
 
     # =========================
-    # FIN DU QUESTIONNAIRE
+    # FIN QUESTIONNAIRE
     # =========================
     if st.session_state.q_index >= len(questions):
-        _finaliser_questionnaire(axes_data)
+        finaliser_questionnaire(axes_data)
         return
 
     # =========================
@@ -118,22 +136,22 @@ def page_questionnaire():
 # =========================
 # FINALISATION & SAUVEGARDE
 # =========================
-def _finaliser_questionnaire(axes_data):
+def finaliser_questionnaire(axes_data):
 
     st.subheader("✅ Merci pour votre participation")
 
     r = st.session_state.responses
 
-    # --- Score par axe
+    # =========================
+    # CALCUL DES SCORES
+    # =========================
     scores_axes = {
         axe: round(sum(r[q] for q in qs) / len(qs), 2)
         for axe, qs in axes_data.items()
     }
 
-    # --- Calcul ICI (score /5 → /100)
     ici = round(sum(scores_axes.values()) / len(scores_axes) * 20, 1)
 
-    # --- Résultat
     st.metric("Indice de Culture d’Innovation (ICI)", f"{ici} / 100")
 
     # =========================
@@ -167,8 +185,9 @@ def _finaliser_questionnaire(axes_data):
 
     if st.button("🏁 Terminer"):
         # Nettoyage session questionnaire
-        del st.session_state.q_index
-        del st.session_state.responses
+        for key in ["q_index", "responses"]:
+            if key in st.session_state:
+                del st.session_state[key]
 
         st.session_state.step = 0
         st.rerun()
