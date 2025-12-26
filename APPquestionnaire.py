@@ -40,8 +40,7 @@ def load_questions():
             "au minimum les colonnes : question, axe"
         )
 
-    df = df.reset_index(drop=True)
-    return df
+    return df.reset_index(drop=True)
 
 
 # =========================
@@ -50,7 +49,7 @@ def load_questions():
 def page_questionnaire():
 
     # =========================
-    # SÉCURITÉ
+    # SÉCURITÉ SESSION
     # =========================
     if "user" not in st.session_state:
         st.session_state.step = 0
@@ -68,12 +67,12 @@ def page_questionnaire():
     total_q = len(df_questions)
 
     # =========================
-    # INIT SESSION
+    # INIT SESSION (ROBUSTE)
     # =========================
     if "q_index" not in st.session_state:
         st.session_state.q_index = 0
 
-    if "responses" not in st.session_state:
+    if "responses" not in st.session_state or not isinstance(st.session_state.responses, list):
         st.session_state.responses = []
 
     q_index = st.session_state.q_index
@@ -92,24 +91,19 @@ def page_questionnaire():
         st.success("🎉 Merci pour votre participation !")
 
         st.markdown("""
-        Votre contribution a bien été enregistrée.
+        Vos réponses ont bien été enregistrées.
 
-        Elle sera analysée de manière **strictement anonyme** et **agrégée**
-        avec l’ensemble des réponses collectées.
-
-        Les résultats permettront d’identifier les leviers d’amélioration
-        de la **culture d’innovation** au sein de l’organisation.
+        Elles seront analysées de manière **strictement anonyme** et **agrégée**.
         """)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.progress(1.0)
 
         if st.button("🏠 Retour à l’accueil", use_container_width=True):
             st.session_state.step = 0
             st.session_state.q_index = 0
             st.session_state.responses = []
             st.rerun()
-
-        # Barre pleine en fin
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        st.progress(1.0)
 
         return
 
@@ -132,7 +126,15 @@ def page_questionnaire():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # =========================
+    # BOUTON SUIVANT (SÉCURISÉ)
+    # =========================
     if st.button("➡️ Question suivante", use_container_width=True):
+
+        # 🔐 Sécurité absolue avant append
+        if "responses" not in st.session_state or not isinstance(st.session_state.responses, list):
+            st.session_state.responses = []
+
         st.session_state.responses.append({
             "email": st.session_state.user.get("email"),
             "question": question_text,
@@ -147,5 +149,5 @@ def page_questionnaire():
     # BARRE DE PROGRESSION (EN BAS)
     # =========================
     st.markdown("<br><br>", unsafe_allow_html=True)
-    progress = min(q_index / total_q, 1.0)
+    progress = (q_index + 1) / total_q
     st.progress(progress)
