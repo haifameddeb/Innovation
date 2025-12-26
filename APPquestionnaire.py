@@ -19,9 +19,6 @@ CHOICES = [
     "Tout à fait d’accord"
 ]
 
-# =========================
-# PAGE QUESTIONNAIRE
-# =========================
 def page_questionnaire():
 
     # =========================
@@ -48,51 +45,39 @@ def page_questionnaire():
     # =========================
     st.title("🧠 Diagnostic InnoMeter")
     st.caption(f"👤 Participant : {st.session_state.user.get('email')}")
-
     st.markdown("---")
 
     # =========================
-    # FIN DU QUESTIONNAIRE
+    # QUESTION COURANTE OU FIN
     # =========================
-    if q_index >= total_q:
+    if q_index < total_q:
+
+        st.subheader(f"Question {q_index + 1} / {total_q}")
+        st.write(QUESTIONS[q_index])
+
+        answer = st.radio(
+            "Votre réponse :",
+            CHOICES,
+            key=f"q_{q_index}"
+        )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        if st.button("➡️ Question suivante", use_container_width=True):
+            st.session_state.responses[q_index] = answer
+            st.session_state.q_index += 1
+            st.rerun()
+
+    else:
         st.success("🎉 Merci pour votre participation !")
         st.write(
             "Vos réponses ont bien été enregistrées. "
             "Elles seront analysées de manière strictement anonyme."
         )
-
-        # DEBUG (à retirer plus tard)
         st.write("🗂️ Réponses collectées :", st.session_state.responses)
 
-        return
-
     # =========================
-    # QUESTION COURANTE
-    # =========================
-    st.subheader(f"Question {q_index + 1} / {total_q}")
-    st.write(QUESTIONS[q_index])
-
-    answer = st.radio(
-        "Votre réponse :",
-        CHOICES,
-        key=f"q_{q_index}"
-    )
-
-    # =========================
-    # NAVIGATION
-    # =========================
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    if st.button("➡️ Question suivante", use_container_width=True):
-        # Sauvegarde réponse
-        st.session_state.responses[q_index] = answer
-
-        # Question suivante
-        st.session_state.q_index += 1
-        st.rerun()
-
-    # =========================
-    # BARRE DE PROGRESSION (EN BAS)
+    # BARRE DE PROGRESSION (TOUJOURS EN BAS)
     # =========================
     st.markdown("<br><br>", unsafe_allow_html=True)
 
