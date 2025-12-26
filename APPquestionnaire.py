@@ -1,7 +1,7 @@
 import streamlit as st
 
 # =========================
-# QUESTIONS (TEMPORAIRE)
+# QUESTIONS (SPRINT 2)
 # =========================
 QUESTIONS = [
     "Dans mon organisation, les nouvelles idées sont encouragées.",
@@ -24,12 +24,16 @@ CHOICES = [
 # =========================
 def page_questionnaire():
 
-    # 🔐 Sécurité minimale
+    # =========================
+    # SÉCURITÉ
+    # =========================
     if "user" not in st.session_state:
         st.session_state.step = 0
         st.rerun()
 
-    # Initialisation
+    # =========================
+    # INITIALISATION SESSION
+    # =========================
     if "q_index" not in st.session_state:
         st.session_state.q_index = 0
 
@@ -45,8 +49,6 @@ def page_questionnaire():
     st.title("🧠 Diagnostic InnoMeter")
     st.caption(f"👤 Participant : {st.session_state.user.get('email')}")
 
-    st.progress((q_index + 1) / total_q)
-
     st.markdown("---")
 
     # =========================
@@ -54,14 +56,20 @@ def page_questionnaire():
     # =========================
     if q_index >= total_q:
         st.success("🎉 Merci pour votre participation !")
-        st.write("Vos réponses ont bien été enregistrées.")
-        st.write(st.session_state.responses)
+        st.write(
+            "Vos réponses ont bien été enregistrées. "
+            "Elles seront analysées de manière strictement anonyme."
+        )
+
+        # DEBUG (à retirer plus tard)
+        st.write("🗂️ Réponses collectées :", st.session_state.responses)
+
         return
 
     # =========================
     # QUESTION COURANTE
     # =========================
-    st.subheader(f"Question {q_index + 1}")
+    st.subheader(f"Question {q_index + 1} / {total_q}")
     st.write(QUESTIONS[q_index])
 
     answer = st.radio(
@@ -73,13 +81,20 @@ def page_questionnaire():
     # =========================
     # NAVIGATION
     # =========================
-    col1, col2 = st.columns([1, 4])
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    with col1:
-        if st.button("➡️ Question suivante"):
-            # Sauvegarde réponse
-            st.session_state.responses[q_index] = answer
+    if st.button("➡️ Question suivante", use_container_width=True):
+        # Sauvegarde réponse
+        st.session_state.responses[q_index] = answer
 
-            # Passage à la question suivante
-            st.session_state.q_index += 1
-            st.rerun()
+        # Question suivante
+        st.session_state.q_index += 1
+        st.rerun()
+
+    # =========================
+    # BARRE DE PROGRESSION (EN BAS)
+    # =========================
+    st.markdown("<br><br>", unsafe_allow_html=True)
+
+    progress = min(q_index / total_q, 1.0)
+    st.progress(progress)
