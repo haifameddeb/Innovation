@@ -1,67 +1,85 @@
 import streamlit as st
-import pandas as pd
-import os
-
-INVITES_FILE = "invites.csv"
 
 # =========================
-# OUTILS
+# QUESTIONS (TEMPORAIRE)
 # =========================
-def load_invites():
-    try:
-        df = pd.read_csv(INVITES_FILE, sep=None, engine="python")
-    except Exception:
-        return None
+QUESTIONS = [
+    "Dans mon organisation, les nouvelles idées sont encouragées.",
+    "Les échecs sont perçus comme des opportunités d’apprentissage.",
+    "Les collaborateurs disposent du temps nécessaire pour innover.",
+    "Les outils technologiques soutiennent l’innovation.",
+    "La direction soutient activement les initiatives innovantes."
+]
 
-    df.columns = (
-        df.columns
-        .astype(str)
-        .str.strip()
-        .str.lower()
-    )
-    return df
-
-
-def check_invitation(email):
-    df_inv = load_invites()
-    if df_inv is None or "email" not in df_inv.columns:
-        return False
-
-    return email.lower() in df_inv["email"].astype(str).str.lower().values
-
+CHOICES = [
+    "Pas du tout d’accord",
+    "Plutôt pas d’accord",
+    "Neutre",
+    "Plutôt d’accord",
+    "Tout à fait d’accord"
+]
 
 # =========================
 # PAGE QUESTIONNAIRE
 # =========================
 def page_questionnaire():
 
-    # 🔐 Sécurité : accès uniquement après accueil
+    # 🔐 Sécurité minimale
     if "user" not in st.session_state:
-        st.error("⛔ Accès non autorisé.")
         st.session_state.step = 0
         st.rerun()
 
-    email_user = str(st.session_state.user.get("email", "")).strip().lower()
+    # Initialisation
+    if "q_index" not in st.session_state:
+        st.session_state.q_index = 0
 
-    # 🔎 Vérification invitation (robuste)
-    if not check_invitation(email_user):
-        st.error("❌ Vous n’êtes pas autorisé à répondre à ce questionnaire.")
-        st.session_state.step = 0
-        st.rerun()
+    if "responses" not in st.session_state:
+        st.session_state.responses = {}
+
+    q_index = st.session_state.q_index
+    total_q = len(QUESTIONS)
 
     # =========================
-    # UI QUESTIONNAIRE (TEST)
+    # HEADER
     # =========================
     st.title("🧠 Diagnostic InnoMeter")
-    st.write(f"👤 Participant : **{email_user}**")
+    st.caption(f"👤 Participant : {st.session_state.user.get('email')}")
+
+    st.progress((q_index + 1) / total_q)
 
     st.markdown("---")
 
-    st.subheader("Question 1")
-    q1 = st.slider(
-        "Dans mon organisation, les nouvelles idées sont encouragées.",
-        1, 5, 3
+    # =========================
+    # FIN DU QUESTIONNAIRE
+    # =========================
+    if q_index >= total_q:
+        st.success("🎉 Merci pour votre participation !")
+        st.write("Vos réponses ont bien été enregistrées.")
+        st.write(st.session_state.responses)
+        return
+
+    # =========================
+    # QUESTION COURANTE
+    # =========================
+    st.subheader(f"Question {q_index + 1}")
+    st.write(QUESTIONS[q_index])
+
+    answer = st.radio(
+        "Votre réponse :",
+        CHOICES,
+        key=f"q_{q_index}"
     )
 
-    if st.button("➡️ Question suivante"):
-        st.success("✅ Questionnaire lancé avec succès !")
+    # =========================
+    # NAVIGATION
+    # =========================
+    col1, col2 = st.columns([1, 4])
+
+    with col1:
+        if st.button("➡️ Question suivante"):
+            # Sauvegarde réponse
+            st.session_state.responses[q_index] = answer
+
+            # Passage à la question suivante
+            st.session_state.q_index += 1
+            st.rerun()
