@@ -39,7 +39,7 @@ if st.session_state.step == 1 and "user" not in st.session_state:
 
 if st.session_state.step == 0:
     # Sprint 1 – Page d’accueil (FIGÉE)
-    page_accueil()
+    page_acceuil()
 
 elif st.session_state.step == 1:
     # Sprint 2 – Questionnaire (FIGÉ)
@@ -49,6 +49,7 @@ else:
     # Sécurité : état inconnu → retour accueil
     st.session_state.step = 0
     st.rerun()
+
 
 
 
