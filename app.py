@@ -85,9 +85,11 @@ if st.session_state.step == 0:
             if admin_flag == "oui":
                 st.session_state.step = 99
             else:
-                st.error("Accès réservé aux administrateurs")
-
+                st.session_state.step = 1
             st.rerun()
+
+
+
 
 # =======================
 # STEP 99 – DASHBOARD ADMIN
@@ -222,3 +224,4 @@ elif st.session_state.step == 99:
     if st.button("⬅ Déconnexion"):
         st.session_state.step = 0
         st.rerun()
+
