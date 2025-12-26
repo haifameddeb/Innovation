@@ -108,7 +108,7 @@ def page_accueil():
         admin_flag = str(user.get("admin", "")).strip().lower()
 
         if admin_flag == "oui":
-            st.session_state.step = 99   # Sprint 3 – Dashboard admin
+            st.session_state.step = 1   # Sprint 3 – Dashboard admin
         else:
             st.session_state.step = 1    # Sprint 2 – Questionnaire
 
@@ -126,3 +126,4 @@ def page_accueil():
         🔒 Vos réponses sont anonymes et analysées uniquement de manière collective.
     </div>
     """, unsafe_allow_html=True)
+
