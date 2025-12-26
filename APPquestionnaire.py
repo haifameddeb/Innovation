@@ -141,3 +141,7 @@ def page_questionnaire():
     # =========================
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.progress((q_index + 1) / total_q)
+
+    from ICI_calcul import calcul_ici
+
+    resultats = calcul_ici(st.session_state.responses)
