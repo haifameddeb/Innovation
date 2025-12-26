@@ -38,19 +38,30 @@ email = st.text_input("📧 Adresse email professionnelle")
 
 if st.button("🚀 Démarrer le diagnostic", use_container_width=True):
 
-    # --- Vérification existence fichier
+    # =========================
+    # CONTRÔLES TECHNIQUES
+    # =========================
+    if not email or not email.strip():
+        st.error("❌ Veuillez saisir une adresse email.")
+        st.stop()
+
     if not os.path.exists(INVITES_FILE):
         st.error("❌ Le fichier des invités est introuvable.")
         st.stop()
 
-    # --- Lecture du fichier invités
+    # =========================
+    # LECTURE ROBUSTE DU CSV
+    # =========================
     try:
-        df_inv = pd.read_csv(INVITES_FILE, sep=";")
+        # sep=None + engine=python => détection automatique , ou ;
+        df_inv = pd.read_csv(INVITES_FILE, sep=None, engine="python")
     except Exception as e:
         st.error("❌ Impossible de lire le fichier des invités.")
         st.stop()
 
-    # --- Nettoyage des colonnes
+    # =========================
+    # NETTOYAGE DES COLONNES
+    # =========================
     df_inv.columns = (
         df_inv.columns
         .astype(str)
@@ -58,40 +69,49 @@ if st.button("🚀 Démarrer le diagnostic", use_container_width=True):
         .str.lower()
     )
 
-    # --- Vérification structure minimale
-    if "email" not in df_inv.columns:
+    # =========================
+    # VALIDATION STRUCTURE
+    # =========================
+    required_cols = {"email"}
+
+    if not required_cols.issubset(df_inv.columns):
         st.error(
-            "❌ Le fichier des invités doit contenir une colonne nommée 'email'.\n\n"
+            "❌ Le fichier des invités doit contenir au minimum la colonne 'email'.\n\n"
             f"Colonnes détectées : {list(df_inv.columns)}"
         )
         st.stop()
 
-    # --- Recherche utilisateur
-    user = df_inv[df_inv["email"].str.lower() == email.strip().lower()]
+    # =========================
+    # CONTRÔLE INVITATION
+    # =========================
+    email_clean = email.strip().lower()
 
-    if user.empty:
+    user_df = df_inv[df_inv["email"].str.lower() == email_clean]
+
+    if user_df.empty:
         st.error("❌ Cette adresse email n’est pas référencée dans la liste des invités.")
+        st.stop()
+
+    # =========================
+    # INITIALISATION SESSION
+    # =========================
+    user = user_df.iloc[0]
+
+    st.session_state.user = user
+    st.session_state.q_index = 0
+    st.session_state.responses = {}
+
+    # =========================
+    # REDIRECTION
+    # =========================
+    admin_flag = str(user.get("admin", "")).strip().lower()
+
+    if admin_flag == "oui":
+        st.session_state.step = 99   # réservé Sprint 3 – Dashboard admin
     else:
-        user = user.iloc[0]
+        st.session_state.step = 1    # Sprint 2 – Questionnaire
 
-        # =========================
-        # INITIALISATION SESSION
-        # =========================
-        st.session_state.user = user
-        st.session_state.q_index = 0
-        st.session_state.responses = {}
-
-        # =========================
-        # REDIRECTION
-        # =========================
-        admin_flag = str(user.get("admin", "")).strip().lower()
-
-        if admin_flag == "oui":
-            st.session_state.step = 99   # dashboard admin (Sprint 3)
-        else:
-            st.session_state.step = 1    # questionnaire (Sprint 2)
-
-        st.rerun()
+    st.rerun()
 
 # =========================
 # CONFIANCE & CITATION
