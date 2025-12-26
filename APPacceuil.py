@@ -38,34 +38,58 @@ email = st.text_input("📧 Adresse email professionnelle")
 
 if st.button("🚀 Démarrer le diagnostic", use_container_width=True):
 
+    # --- Vérification existence fichier
     if not os.path.exists(INVITES_FILE):
-        st.error("Fichier des invités introuvable.")
+        st.error("❌ Le fichier des invités est introuvable.")
         st.stop()
 
-    df_inv = pd.read_csv(INVITES_FILE, sep=";")
-    df_inv.columns = df_inv.columns.str.strip().str.lower()
+    # --- Lecture du fichier invités
+    try:
+        df_inv = pd.read_csv(INVITES_FILE, sep=";")
+    except Exception as e:
+        st.error("❌ Impossible de lire le fichier des invités.")
+        st.stop()
 
-    user = df_inv[df_inv["email"].str.lower() == email.lower()]
+    # --- Nettoyage des colonnes
+    df_inv.columns = (
+        df_inv.columns
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    # --- Vérification structure minimale
+    if "email" not in df_inv.columns:
+        st.error(
+            "❌ Le fichier des invités doit contenir une colonne nommée 'email'.\n\n"
+            f"Colonnes détectées : {list(df_inv.columns)}"
+        )
+        st.stop()
+
+    # --- Recherche utilisateur
+    user = df_inv[df_inv["email"].str.lower() == email.strip().lower()]
 
     if user.empty:
         st.error("❌ Cette adresse email n’est pas référencée dans la liste des invités.")
     else:
         user = user.iloc[0]
 
-        # 🔐 Sauvegarde session
+        # =========================
+        # INITIALISATION SESSION
+        # =========================
         st.session_state.user = user
-
-        # 🔥 Initialisation questionnaire
         st.session_state.q_index = 0
         st.session_state.responses = {}
 
-        # 🔀 Redirection selon rôle
+        # =========================
+        # REDIRECTION
+        # =========================
         admin_flag = str(user.get("admin", "")).strip().lower()
 
         if admin_flag == "oui":
-            st.session_state.step = 99   # dashboard admin
+            st.session_state.step = 99   # dashboard admin (Sprint 3)
         else:
-            st.session_state.step = 1    # questionnaire
+            st.session_state.step = 1    # questionnaire (Sprint 2)
 
         st.rerun()
 
