@@ -1,8 +1,8 @@
 import streamlit as st
 
 # Import des pages (Sprints séparés)
-from APPaccueil.py import page_accueil
-from APPquestionnaire.py import page_questionnaire
+from APPaccueil import page_accueil
+from APPquestionnaire import page_questionnaire
 
 # =========================
 # CONFIG GLOBALE
@@ -49,4 +49,5 @@ else:
     # Sécurité : état inconnu → retour accueil
     st.session_state.step = 0
     st.rerun()
+
 
