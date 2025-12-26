@@ -1,5 +1,6 @@
 import streamlit as st
 import plotly.graph_objects as go
+import plotly.express as px
 
 # =========================
 # INTERPRÉTATION ICI
@@ -17,19 +18,10 @@ def interpret_ici(score: float):
 # RADAR DES AXES
 # =========================
 def radar_axes(scores_par_axe: dict):
-    """
-    scores_par_axe = {
-        "Culture": 3.8,
-        "Organisation": 3.2,
-        "Technologie": 4.1,
-        "Leadership": 3.5
-    }
-    """
 
     axes = list(scores_par_axe.keys())
     scores = list(scores_par_axe.values())
 
-    # Fermeture du polygone
     axes.append(axes[0])
     scores.append(scores[0])
 
@@ -39,9 +31,8 @@ def radar_axes(scores_par_axe: dict):
         r=scores,
         theta=axes,
         fill='toself',
-        fillcolor='rgba(79, 112, 255, 0.4)',  # bleu InnoMeter
-        line=dict(color='rgba(79, 112, 255, 1)', width=2),
-        name="Indice par axe"
+        fillcolor='rgba(79, 112, 255, 0.4)',
+        line=dict(color='rgba(79, 112, 255, 1)', width=2)
     ))
 
     fig.update_layout(
@@ -53,7 +44,39 @@ def radar_axes(scores_par_axe: dict):
             )
         ),
         showlegend=False,
-        margin=dict(l=40, r=40, t=40, b=40)
+        margin=dict(l=30, r=30, t=30, b=30)
+    )
+
+    return fig
+
+
+# =========================
+# HISTOGRAMME PAR AXE
+# =========================
+def histogram_axes(scores_par_axe: dict):
+
+    df = {
+        "Axe": list(scores_par_axe.keys()),
+        "Score": list(scores_par_axe.values())
+    }
+
+    fig = px.bar(
+        df,
+        x="Axe",
+        y="Score",
+        range_y=[0, 5],
+        text="Score"
+    )
+
+    fig.update_traces(
+        marker_color="rgba(79, 112, 255, 0.8)",
+        textposition="outside"
+    )
+
+    fig.update_layout(
+        yaxis_title="Score",
+        xaxis_title="",
+        margin=dict(l=30, r=30, t=30, b=30)
     )
 
     return fig
@@ -71,30 +94,39 @@ def afficher_resultats(resultats: dict):
 
     st.header("📊 Votre résultat InnoMeter")
 
-    # =========================
-    # SCORE GLOBAL
-    # =========================
-    col1, col2 = st.columns(2)
+    colA, colB = st.columns(2)
 
-    with col1:
+    with colA:
         st.metric(
             "Indice de Culture d’Innovation (ICI)",
             f"{ici}/5"
         )
 
-    with col2:
+    with colB:
         st.markdown(f"### {niveau}")
 
     st.info(message)
 
     # =========================
-    # VISUEL RADAR
+    # VISUELS CÔTE À CÔTE
     # =========================
     if par_axe:
-        st.subheader("🧭 Lecture par axe")
 
-        fig = radar_axes(par_axe)
-        st.plotly_chart(fig, use_container_width=True)
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("🧭 Lecture globale par axe")
+            st.plotly_chart(
+                radar_axes(par_axe),
+                use_container_width=True
+            )
+
+        with col2:
+            st.subheader("📊 Détail des scores")
+            st.plotly_chart(
+                histogram_axes(par_axe),
+                use_container_width=True
+            )
 
     # =========================
     # MESSAGE DE CONFIANCE
