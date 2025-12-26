@@ -87,7 +87,10 @@ if st.session_state.step == 0:
             else:
                 st.session_state.step = 1
             st.rerun()
-
+        
+        
+        st.session_state.user = user
+        st.rerun()
 
 
 
@@ -224,4 +227,5 @@ elif st.session_state.step == 99:
     if st.button("⬅ Déconnexion"):
         st.session_state.step = 0
         st.rerun()
+
 
