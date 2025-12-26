@@ -1,10 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import os
 from datetime import datetime
-from pandas.errors import EmptyDataError
+from pandas.errors import EmptyDataError, ParserError
 
 # =======================
 # CONFIG
@@ -15,81 +14,50 @@ RESULTATS_FILE = "resultats_innovation.csv"
 
 st.set_page_config(
     page_title="Indice de Culture de l’Innovation – ICI",
-    layout="centered"
+    layout="wide"
 )
 
 # =======================
 # UTILS
 # =======================
-def safe_read_csv(path):
-    if not os.path.exists(path):
-        return pd.DataFrame()
-    try:
-        return pd.read_csv(path)
-    except EmptyDataError:
-        return pd.DataFrame()
-
 def clean_columns(df):
     df.columns = (
-        df.columns
-        .astype(str)
+        df.columns.astype(str)
         .str.strip()
         .str.lower()
         .str.replace(" ", "_")
     )
     return df
 
-def get_maturity_level(score, df_interp):
-    for _, row in df_interp.iterrows():
-        if row["min"] <= score <= row["max"]:
-            desc = (
-                row.get("description")
-                or row.get("description_du_niveau")
-                or row.get("descriptif")
-                or ""
-            )
-            return row["niveau"], desc
-    return "Inconnu", ""
+def safe_read_csv(path):
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    try:
+        df = pd.read_csv(path, sep=";", engine="python")
+        df = df.loc[:, ~df.columns.str.match(r"^unnamed")]
+        return df
+    except (EmptyDataError, ParserError):
+        return pd.DataFrame()
 
 # =======================
 # LOAD QUESTIONS
 # =======================
 try:
     df_q = pd.read_excel(QUESTIONS_FILE, sheet_name="questions")
-    df_interp = pd.read_excel(QUESTIONS_FILE, sheet_name="interpretation")
 except Exception:
     st.error("❌ Impossible de charger questions_ici.xlsx")
     st.stop()
 
 df_q = clean_columns(df_q)
-df_interp = clean_columns(df_interp)
 
-# compatibilité id / code
 if "id" in df_q.columns and "code" not in df_q.columns:
     df_q = df_q.rename(columns={"id": "code"})
-
-required_cols = {"axe", "code", "question"}
-if not required_cols.issubset(df_q.columns):
-    st.error("❌ Colonnes manquantes dans l’onglet questions")
-    st.write("Colonnes détectées :", list(df_q.columns))
-    st.stop()
-
-axes_data = {
-    axe: df_q[df_q["axe"] == axe]["code"].tolist()
-    for axe in df_q["axe"].unique()
-}
-
-questions_sequence = df_q.to_dict("records")
 
 # =======================
 # SESSION
 # =======================
 if "step" not in st.session_state:
     st.session_state.step = 0
-if "responses" not in st.session_state:
-    st.session_state.responses = {}
-if "q_index" not in st.session_state:
-    st.session_state.q_index = 0
 
 # =======================
 # STEP 0 – AUTH
@@ -112,147 +80,145 @@ if st.session_state.step == 0:
             st.error("Accès refusé")
         else:
             user = user.iloc[0]
-            st.session_state.user = user
-
             admin_flag = str(user.get("admin", "")).strip().lower()
+
             if admin_flag == "oui":
                 st.session_state.step = 99
             else:
-                st.session_state.step = 1
+                st.error("Accès réservé aux administrateurs")
 
             st.rerun()
-
-# =======================
-# STEP 1 – QUESTIONNAIRE
-# =======================
-elif st.session_state.step == 1:
-    q = questions_sequence[st.session_state.q_index]
-
-    st.subheader(f"Axe : {q['axe']}")
-    st.write(q["question"])
-
-    st.session_state.responses[q["code"]] = st.select_slider(
-        "Votre réponse",
-        [1, 2, 3, 4, 5],
-        format_func=lambda x: [
-            "Pas du tout d’accord",
-            "Pas d’accord",
-            "Neutre",
-            "D’accord",
-            "Tout à fait"
-        ][x - 1],
-        key=q["code"]
-    )
-
-    st.progress((st.session_state.q_index + 1) / len(questions_sequence))
-
-    if st.button("Suivant"):
-        if st.session_state.q_index < len(questions_sequence) - 1:
-            st.session_state.q_index += 1
-        else:
-            st.session_state.step = 2
-        st.rerun()
-
-# =======================
-# STEP 2 – RESULTATS USER
-# =======================
-elif st.session_state.step == 2:
-    r = st.session_state.responses
-
-    scores_axes = {
-        axe: sum(r[q] for q in qs) / len(qs)
-        for axe, qs in axes_data.items()
-    }
-
-    ici = round(sum(scores_axes.values()) / len(scores_axes) * 20, 1)
-    niveau, desc = get_maturity_level(ici, df_interp)
-
-    df_out = pd.DataFrame([{
-        "email": st.session_state.user["email"],
-        "filiale": st.session_state.user["filiale"],
-        **r,
-        **scores_axes,
-        "ici": ici,
-        "niveau": niveau,
-        "date": datetime.now().strftime("%d/%m/%Y %H:%M")
-    }])
-
-    if os.path.exists(RESULTATS_FILE) and os.stat(RESULTATS_FILE).st_size > 0:
-        df_out.to_csv(RESULTATS_FILE, mode="a", header=False, index=False)
-    else:
-        df_out.to_csv(RESULTATS_FILE, index=False)
-
-    st.success(f"Score ICI : {ici}/100 – {niveau}")
-    st.info(desc)
-
-    fig = go.Figure(go.Scatterpolar(
-        r=list(scores_axes.values()) + [list(scores_axes.values())[0]],
-        theta=list(scores_axes.keys()) + [list(scores_axes.keys())[0]],
-        fill="toself"
-    ))
-    fig.update_layout(polar=dict(radialaxis=dict(range=[0, 5])))
-    st.plotly_chart(fig)
-
-    st.subheader("📊 Détail des scores par axe")
-    st.bar_chart(pd.DataFrame(scores_axes, index=["Score"]).T)
-
-    if st.button("⬅ Retour à l’accueil"):
-        st.session_state.step = 0
-        st.session_state.responses = {}
-        st.session_state.q_index = 0
-        st.rerun()
 
 # =======================
 # STEP 99 – DASHBOARD ADMIN
 # =======================
 elif st.session_state.step == 99:
+
     st.title("📊 Dashboard Administrateur – ICI")
 
+    # =======================
+    # DATA
+    # =======================
     df_inv = clean_columns(pd.read_csv(INVITES_FILE))
     df_res = safe_read_csv(RESULTATS_FILE)
-
     if not df_res.empty:
         df_res = clean_columns(df_res)
 
+    # =======================
+    # KPI
+    # =======================
     col1, col2, col3, col4 = st.columns(4)
 
-    col1.metric("Invités", len(df_inv))
-    col2.metric("Réponses", len(df_res))
-    col3.metric(
-        "Filiales",
-        df_inv["filiale"].nunique() if "filiale" in df_inv.columns else 0
-    )
+    col1.metric("👥 Invités", len(df_inv))
+    col2.metric("📝 Réponses", len(df_res))
+    col3.metric("🏢 Filiales", df_inv["filiale"].nunique())
 
     score_moyen = "—"
     if not df_res.empty and "ici" in df_res.columns:
-        score_moyen = f"{df_res['ici'].mean():.1f}"
+        score_moyen = f"{df_res['ici'].astype(float).mean():.1f}"
 
-    col4.metric("Score moyen", score_moyen)
+    col4.metric("📊 Score moyen ICI", score_moyen)
 
-    if df_res.empty:
-        st.info("Aucun résultat disponible pour le moment.")
-    else:
+    # =======================
+    # VUE PAR FILIALE
+    # =======================
+    st.subheader("🟣 Vue par filiale / direction")
+
+    filiales = sorted(df_inv["filiale"].unique())
+    filiale_sel = st.multiselect(
+        "Filiale",
+        filiales,
+        default=filiales
+    )
+
+    df_inv_f = df_inv[df_inv["filiale"].isin(filiale_sel)]
+    df_res_f = df_res[df_res["filiale"].isin(filiale_sel)] if not df_res.empty else df_res
+
+    # =======================
+    # TEMPS MOYEN DE RÉPONSE
+    # =======================
+    temps_moyen = "—"
+    if not df_res_f.empty and "date" in df_res_f.columns:
+        df_res_f["date"] = pd.to_datetime(df_res_f["date"], errors="coerce")
+        df_first = df_res_f.groupby("email")["date"].min()
+        temps_moyen = f"{df_first.diff().mean().total_seconds() / 3600:.1f} h"
+
+    st.metric("🕒 Temps moyen de réponse", temps_moyen)
+
+    # =======================
+    # ICI MOYEN PAR FILIALE
+    # =======================
+    if not df_res_f.empty and "ici" in df_res_f.columns:
         st.subheader("📈 ICI moyen par filiale")
-        if "filiale" in df_res.columns and "ici" in df_res.columns:
-            fig = px.bar(
-                df_res.groupby("filiale")["ici"].mean().reset_index(),
-                x="filiale", y="ici"
-            )
-            st.plotly_chart(fig)
+        fig = px.bar(
+            df_res_f.groupby("filiale")["ici"].mean().reset_index(),
+            x="filiale",
+            y="ici",
+            labels={"ici": "Score ICI"}
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-        if "niveau" in df_res.columns:
-            st.subheader("📊 Répartition des niveaux de maturité")
-            st.plotly_chart(px.histogram(df_res, x="niveau"))
+    # =======================
+    # SUIVI DES INVITÉS
+    # =======================
+    st.subheader("📋 Suivi des invitations")
 
-        st.subheader("📋 Données détaillées")
-        st.dataframe(df_res, use_container_width=True)
+    df_res_light = pd.DataFrame()
+    if not df_res_f.empty:
+        df_res_light = df_res_f[["email", "date"]].drop_duplicates()
+
+    df_suivi = df_inv_f.merge(
+        df_res_light,
+        on="email",
+        how="left"
+    )
+
+    df_suivi["invité"] = "✅"
+    df_suivi["a répondu"] = df_suivi["date"].notna().map({True: "✅", False: "❌"})
+    df_suivi["date de réponse"] = df_suivi["date"].fillna("—")
+
+    df_display = df_suivi[
+        ["email", "filiale", "invité", "a répondu", "date de réponse"]
+    ]
+
+    st.dataframe(
+        df_display,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # =======================
+    # RELANCE NON-RÉPONDANTS
+    # =======================
+    st.subheader("🔔 Relancer les non-répondants")
+
+    df_non_rep = df_display[df_display["a répondu"] == "❌"]
+
+    if df_non_rep.empty:
+        st.success("Tous les invités ont répondu 🎉")
+    else:
+        st.warning(f"{len(df_non_rep)} invité(s) à relancer")
 
         st.download_button(
-            "⬇ Export résultats",
-            df_res.to_csv(index=False),
-            "resultats_ici.csv"
+            "📤 Export liste de relance (emails)",
+            df_non_rep["email"].to_csv(index=False),
+            "relance_non_repondants.csv"
         )
 
-    if st.button("⬅ Retour authentification"):
+    # =======================
+    # EXPORT EXCEL SUIVI
+    # =======================
+    st.subheader("📤 Export")
+
+    st.download_button(
+        "⬇ Export Excel – Suivi participation",
+        df_display.to_excel(index=False, engine="openpyxl"),
+        "suivi_participation.xlsx"
+    )
+
+    # =======================
+    # LOGOUT
+    # =======================
+    if st.button("⬅ Déconnexion"):
         st.session_state.step = 0
         st.rerun()
