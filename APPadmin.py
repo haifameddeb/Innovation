@@ -1,211 +1,117 @@
 import streamlit as st
 import pandas as pd
-import os
-from datetime import datetime, date
+from datetime import date, datetime
 import uuid
+import os
 
 # =========================
 # CONFIG
 # =========================
-INVITES_FILE = "invites.csv"
-DATA_DIR = "data"
-CAMPAGNES_FILE = os.path.join(DATA_DIR, "campagnes.csv")
-
 st.set_page_config(
     page_title="InnoMeter – Administration",
     page_icon="🛠️",
-    layout="wide"
+    layout="centered"
 )
 
-# =========================
-# UTILS
-# =========================
-def ensure_data_files():
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR)
+CAMPAIGN_FILE = "campagnes.csv"
 
-    if not os.path.exists(CAMPAGNES_FILE):
-        df = pd.DataFrame(columns=[
+# =========================
+# INIT FICHIER CAMPAGNES
+# =========================
+if not os.path.exists(CAMPAIGN_FILE):
+    df_init = pd.DataFrame(
+        columns=[
             "id_campagne",
             "nom",
             "description",
             "date_creation",
             "date_fin",
             "statut"
-        ])
-        df.to_csv(CAMPAGNES_FILE, index=False)
-
-
-def load_invites():
-    df = pd.read_csv(INVITES_FILE, sep=None, engine="python")
-    df.columns = df.columns.str.strip().str.lower()
-    return df
-
-
-def is_admin(email, df_inv):
-    user = df_inv[df_inv["email"].str.lower() == email.lower()]
-    if user.empty:
-        return False
-    return str(user.iloc[0].get("admin", "")).strip().lower() == "oui"
-
+        ]
+    )
+    df_init.to_csv(CAMPAIGN_FILE, index=False)
 
 def load_campagnes():
-    return pd.read_csv(CAMPAGNES_FILE)
-
+    return pd.read_csv(CAMPAIGN_FILE)
 
 def save_campagnes(df):
-    df.to_csv(CAMPAGNES_FILE, index=False)
-
-
-# =========================
-# INIT
-# =========================
-ensure_data_files()
-
-if "admin_authenticated" not in st.session_state:
-    st.session_state.admin_authenticated = False
-
-# Initialisation correcte du formulaire
-if "camp_nom" not in st.session_state:
-    st.session_state.camp_nom = ""
-
-if "camp_desc" not in st.session_state:
-    st.session_state.camp_desc = ""
-
-if "camp_date_fin" not in st.session_state:
-    st.session_state.camp_date_fin = date.today()
+    df.to_csv(CAMPAIGN_FILE, index=False)
 
 # =========================
 # HEADER
 # =========================
 st.title("🛠️ InnoMeter – Administration")
-st.caption("Gestion des campagnes de diagnostic")
+st.subheader("Gestion des campagnes de diagnostic")
+
+email_admin = st.session_state.get("user", {}).get("email", "admin")
+st.markdown(f"👋 **Bienvenue {email_admin}**")
+
 st.divider()
 
 # =========================
-# AUTH ADMIN
+# LISTE DES CAMPAGNES
 # =========================
-if not st.session_state.admin_authenticated:
+st.markdown("## 📋 Campagnes")
 
-    st.subheader("🔐 Connexion administrateur")
-    email = st.text_input("📧 Adresse email administrateur")
-
-    if st.button("Se connecter", use_container_width=True):
-
-        if not email.strip():
-            st.error("❌ Veuillez saisir une adresse email.")
-            st.stop()
-
-        df_inv = load_invites()
-
-        if not is_admin(email, df_inv):
-            st.error("❌ Accès refusé. Vous n’êtes pas administrateur.")
-            st.stop()
-
-        st.session_state.admin_authenticated = True
-        st.session_state.admin_email = email
-        st.success("✅ Authentification réussie")
-        st.rerun()
-
-    st.stop()
-
-# =========================
-# DASHBOARD CAMPAGNES
-# =========================
 df_campagnes = load_campagnes()
 
-st.success(f"👋 Bienvenue {st.session_state.admin_email}")
-st.divider()
-
-show_archived = st.checkbox("Afficher les campagnes archivées", value=False)
-
-if show_archived:
-    df_view = df_campagnes
-else:
-    df_view = df_campagnes[df_campagnes["statut"] != "Archivée"]
-
-# =========================
-# LISTE CAMPAGNES
-# =========================
-st.subheader("📋 Campagnes")
-
-if df_view.empty:
+if df_campagnes.empty:
     st.info("Aucune campagne à afficher.")
 else:
-    for _, row in df_view.sort_values("date_creation", ascending=False).iterrows():
-
-        with st.expander(f"📌 {row['nom']} — {row['statut']}"):
-
-            st.write(row["description"])
-            st.caption(f"Créée le {row['date_creation']} | Fin : {row['date_fin']}")
-
-            col1, col2 = st.columns(2)
-
-            # 🗑️ SUPPRESSION (Brouillon uniquement)
-            if row["statut"] == "Brouillon":
-                with col1:
-                    if st.button("🗑️ Supprimer", key=f"del_{row['id_campagne']}"):
-                        df_campagnes = df_campagnes[
-                            df_campagnes["id_campagne"] != row["id_campagne"]
-                        ]
-                        save_campagnes(df_campagnes)
-                        st.rerun()
-
-            # 📦 ARCHIVAGE
-            if row["statut"] != "Archivée":
-                with col2:
-                    if st.button("📦 Archiver", key=f"arch_{row['id_campagne']}"):
-                        df_campagnes.loc[
-                            df_campagnes["id_campagne"] == row["id_campagne"],
-                            "statut"
-                        ] = "Archivée"
-                        save_campagnes(df_campagnes)
-                        st.rerun()
+    st.dataframe(df_campagnes, use_container_width=True)
 
 st.divider()
 
 # =========================
-# CREATION CAMPAGNE
+# FORMULAIRE CREATION
 # =========================
-st.subheader("➕ Créer une nouvelle campagne")
+st.markdown("## ➕ Créer une nouvelle campagne")
 
-with st.form("create_campaign_form"):
+with st.form("form_create_campaign", clear_on_submit=True):
 
-    nom = st.text_input("Nom de la campagne", key="camp_nom")
-    description = st.text_area("Description", key="camp_desc")
+    nom = st.text_input(
+        "Nom de la campagne",
+        placeholder="Ex: 2025/T1"
+    )
+
+    description = st.text_area(
+        "Description",
+        placeholder="Description de la campagne"
+    )
+
     date_fin = st.date_input(
         "Date de fin de la campagne",
         min_value=date.today(),
-        key="camp_date_fin"
+        value=date.today()
     )
 
     submitted = st.form_submit_button("Créer la campagne")
 
-    if submitted:
-        if not nom.strip():
-            st.error("❌ Le nom de la campagne est obligatoire.")
-            st.stop()
+# =========================
+# TRAITEMENT SUBMIT
+# =========================
+if submitted:
 
-        new_campaign = {
-            "id_campagne": str(uuid.uuid4())[:8],
-            "nom": nom.strip(),
-            "description": description.strip(),
-            "date_creation": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "date_fin": date_fin.strftime("%Y-%m-%d"),
-            "statut": "Brouillon"
-        }
+    if not nom.strip():
+        st.error("❌ Le nom de la campagne est obligatoire.")
+        st.stop()
 
-        df_campagnes = pd.concat(
-            [df_campagnes, pd.DataFrame([new_campaign])],
-            ignore_index=True
-        )
+    new_campaign = {
+        "id_campagne": str(uuid.uuid4())[:8],
+        "nom": nom.strip(),
+        "description": description.strip(),
+        "date_creation": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "date_fin": date_fin.strftime("%Y-%m-%d"),
+        "statut": "Brouillon"
+    }
 
-        save_campagnes(df_campagnes)
+    df_campagnes = load_campagnes()
+    df_campagnes = pd.concat(
+        [df_campagnes, pd.DataFrame([new_campaign])],
+        ignore_index=True
+    )
 
-        # 🧹 Reset formulaire
-        st.session_state.camp_nom = ""
-        st.session_state.camp_desc = ""
-        st.session_state.camp_date_fin = date.today()
+    save_campagnes(df_campagnes)
 
-        st.success("✅ Campagne créée avec succès.")
-        st.rerun()
+    st.success("✅ Campagne créée avec succès.")
+    st.rerun()
