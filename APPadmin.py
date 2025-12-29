@@ -65,10 +65,15 @@ ensure_data_files()
 if "admin_authenticated" not in st.session_state:
     st.session_state.admin_authenticated = False
 
-# Init champs formulaire
-for key in ["camp_nom", "camp_desc", "camp_date_fin"]:
-    if key not in st.session_state:
-        st.session_state[key] = ""
+# Initialisation correcte du formulaire
+if "camp_nom" not in st.session_state:
+    st.session_state.camp_nom = ""
+
+if "camp_desc" not in st.session_state:
+    st.session_state.camp_desc = ""
+
+if "camp_date_fin" not in st.session_state:
+    st.session_state.camp_date_fin = date.today()
 
 # =========================
 # HEADER
@@ -87,14 +92,19 @@ if not st.session_state.admin_authenticated:
 
     if st.button("Se connecter", use_container_width=True):
 
+        if not email.strip():
+            st.error("❌ Veuillez saisir une adresse email.")
+            st.stop()
+
         df_inv = load_invites()
 
         if not is_admin(email, df_inv):
-            st.error("❌ Accès refusé.")
+            st.error("❌ Accès refusé. Vous n’êtes pas administrateur.")
             st.stop()
 
         st.session_state.admin_authenticated = True
         st.session_state.admin_email = email
+        st.success("✅ Authentification réussie")
         st.rerun()
 
     st.stop()
@@ -107,13 +117,12 @@ df_campagnes = load_campagnes()
 st.success(f"👋 Bienvenue {st.session_state.admin_email}")
 st.divider()
 
-# Filtres
 show_archived = st.checkbox("Afficher les campagnes archivées", value=False)
 
-if not show_archived:
-    df_view = df_campagnes[df_campagnes["statut"] != "Archivée"]
-else:
+if show_archived:
     df_view = df_campagnes
+else:
+    df_view = df_campagnes[df_campagnes["statut"] != "Archivée"]
 
 # =========================
 # LISTE CAMPAGNES
@@ -198,5 +207,5 @@ with st.form("create_campaign_form"):
         st.session_state.camp_desc = ""
         st.session_state.camp_date_fin = date.today()
 
-        st.success("✅ Campagne créée.")
+        st.success("✅ Campagne créée avec succès.")
         st.rerun()
