@@ -37,10 +37,6 @@ def ensure_data_files():
 
 
 def load_invites():
-    if not os.path.exists(INVITES_FILE):
-        st.error("❌ Fichier invites.csv introuvable.")
-        st.stop()
-
     df = pd.read_csv(INVITES_FILE, sep=None, engine="python")
     df.columns = df.columns.str.strip().str.lower()
     return df
@@ -69,6 +65,11 @@ ensure_data_files()
 if "admin_authenticated" not in st.session_state:
     st.session_state.admin_authenticated = False
 
+# Init champs formulaire
+for key in ["camp_nom", "camp_desc", "camp_date_fin"]:
+    if key not in st.session_state:
+        st.session_state[key] = ""
+
 # =========================
 # HEADER
 # =========================
@@ -86,19 +87,14 @@ if not st.session_state.admin_authenticated:
 
     if st.button("Se connecter", use_container_width=True):
 
-        if not email or not email.strip():
-            st.error("❌ Veuillez saisir une adresse email.")
-            st.stop()
-
         df_inv = load_invites()
 
         if not is_admin(email, df_inv):
-            st.error("❌ Accès refusé. Vous n’êtes pas administrateur.")
+            st.error("❌ Accès refusé.")
             st.stop()
 
         st.session_state.admin_authenticated = True
         st.session_state.admin_email = email
-        st.success("✅ Authentification réussie")
         st.rerun()
 
     st.stop()
@@ -106,32 +102,56 @@ if not st.session_state.admin_authenticated:
 # =========================
 # DASHBOARD CAMPAGNES
 # =========================
+df_campagnes = load_campagnes()
+
 st.success(f"👋 Bienvenue {st.session_state.admin_email}")
 st.divider()
 
-df_campagnes = load_campagnes()
+# Filtres
+show_archived = st.checkbox("Afficher les campagnes archivées", value=False)
 
-col1, col2 = st.columns([3, 1])
+if not show_archived:
+    df_view = df_campagnes[df_campagnes["statut"] != "Archivée"]
+else:
+    df_view = df_campagnes
 
-with col1:
-    st.subheader("📋 Campagnes existantes")
+# =========================
+# LISTE CAMPAGNES
+# =========================
+st.subheader("📋 Campagnes")
 
-    if df_campagnes.empty:
-        st.info("Aucune campagne créée pour le moment.")
-    else:
-        st.dataframe(
-            df_campagnes.sort_values("date_creation", ascending=False),
-            use_container_width=True,
-            hide_index=True
-        )
+if df_view.empty:
+    st.info("Aucune campagne à afficher.")
+else:
+    for _, row in df_view.sort_values("date_creation", ascending=False).iterrows():
 
-with col2:
-    st.subheader("📊 Indicateurs")
-    st.metric("Nombre de campagnes", len(df_campagnes))
-    st.metric(
-        "Campagnes en cours",
-        len(df_campagnes[df_campagnes["statut"] == "En cours"])
-    )
+        with st.expander(f"📌 {row['nom']} — {row['statut']}"):
+
+            st.write(row["description"])
+            st.caption(f"Créée le {row['date_creation']} | Fin : {row['date_fin']}")
+
+            col1, col2 = st.columns(2)
+
+            # 🗑️ SUPPRESSION (Brouillon uniquement)
+            if row["statut"] == "Brouillon":
+                with col1:
+                    if st.button("🗑️ Supprimer", key=f"del_{row['id_campagne']}"):
+                        df_campagnes = df_campagnes[
+                            df_campagnes["id_campagne"] != row["id_campagne"]
+                        ]
+                        save_campagnes(df_campagnes)
+                        st.rerun()
+
+            # 📦 ARCHIVAGE
+            if row["statut"] != "Archivée":
+                with col2:
+                    if st.button("📦 Archiver", key=f"arch_{row['id_campagne']}"):
+                        df_campagnes.loc[
+                            df_campagnes["id_campagne"] == row["id_campagne"],
+                            "statut"
+                        ] = "Archivée"
+                        save_campagnes(df_campagnes)
+                        st.rerun()
 
 st.divider()
 
@@ -141,11 +161,13 @@ st.divider()
 st.subheader("➕ Créer une nouvelle campagne")
 
 with st.form("create_campaign_form"):
-    nom = st.text_input("Nom de la campagne")
-    description = st.text_area("Description")
+
+    nom = st.text_input("Nom de la campagne", key="camp_nom")
+    description = st.text_area("Description", key="camp_desc")
     date_fin = st.date_input(
         "Date de fin de la campagne",
-        min_value=date.today()
+        min_value=date.today(),
+        key="camp_date_fin"
     )
 
     submitted = st.form_submit_button("Créer la campagne")
@@ -171,5 +193,10 @@ with st.form("create_campaign_form"):
 
         save_campagnes(df_campagnes)
 
-        st.success("✅ Campagne créée avec succès.")
+        # 🧹 Reset formulaire
+        st.session_state.camp_nom = ""
+        st.session_state.camp_desc = ""
+        st.session_state.camp_date_fin = date.today()
+
+        st.success("✅ Campagne créée.")
         st.rerun()
