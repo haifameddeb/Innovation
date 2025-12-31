@@ -65,10 +65,15 @@ ensure_data_files()
 if "admin_authenticated" not in st.session_state:
     st.session_state.admin_authenticated = False
 
-# Init champs formulaire
-for key in ["camp_nom", "camp_desc", "camp_date_fin"]:
-    if key not in st.session_state:
-        st.session_state[key] = ""
+# ✅ INIT CORRECTE DES CHAMPS FORMULAIRE
+if "camp_nom" not in st.session_state:
+    st.session_state.camp_nom = ""
+
+if "camp_desc" not in st.session_state:
+    st.session_state.camp_desc = ""
+
+if "camp_date_fin" not in st.session_state:
+    st.session_state.camp_date_fin = date.today()
 
 # =========================
 # HEADER
@@ -132,7 +137,6 @@ else:
 
             col1, col2 = st.columns(2)
 
-            # 🗑️ SUPPRESSION (Brouillon uniquement)
             if row["statut"] == "Brouillon":
                 with col1:
                     if st.button("🗑️ Supprimer", key=f"del_{row['id_campagne']}"):
@@ -142,7 +146,6 @@ else:
                         save_campagnes(df_campagnes)
                         st.rerun()
 
-            # 📦 ARCHIVAGE
             if row["statut"] != "Archivée":
                 with col2:
                     if st.button("📦 Archiver", key=f"arch_{row['id_campagne']}"):
@@ -193,7 +196,7 @@ with st.form("create_campaign_form"):
 
         save_campagnes(df_campagnes)
 
-        # 🧹 Reset formulaire
+        # Reset formulaire
         st.session_state.camp_nom = ""
         st.session_state.camp_desc = ""
         st.session_state.camp_date_fin = date.today()
