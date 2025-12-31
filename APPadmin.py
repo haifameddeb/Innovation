@@ -1,41 +1,74 @@
 import streamlit as st
 import pandas as pd
-from datetime import date, datetime
-import uuid
 import os
+from datetime import date
 
 # =========================
 # CONFIG
 # =========================
+CAMPAIGN_FILE = "campagnes.csv"
+
 st.set_page_config(
     page_title="InnoMeter – Administration",
     page_icon="🛠️",
-    layout="centered"
+    layout="wide"
 )
 
-CAMPAIGN_FILE = "campagnes.csv"
+# =========================
+# SESSION INIT (SAFE)
+# =========================
+if "admin_email" not in st.session_state:
+    st.session_state.admin_email = "haifa.meddeb@rose-blanche.com"
+
+if "camp_nom" not in st.session_state:
+    st.session_state.camp_nom = ""
+
+if "camp_desc" not in st.session_state:
+    st.session_state.camp_desc = ""
+
+if "camp_date_fin" not in st.session_state:
+    st.session_state.camp_date_fin = date.today()
 
 # =========================
-# INIT FICHIER CAMPAGNES
+# UTILS
 # =========================
-if not os.path.exists(CAMPAIGN_FILE):
-    df_init = pd.DataFrame(
-        columns=[
-            "id_campagne",
-            "nom",
-            "description",
-            "date_creation",
-            "date_fin",
-            "statut"
-        ]
-    )
-    df_init.to_csv(CAMPAIGN_FILE, index=False)
+def load_campaigns():
+    if not os.path.exists(CAMPAIGN_FILE):
+        return pd.DataFrame(columns=[
+            "nom", "description", "date_fin", "statut", "date_creation"
+        ])
+    return pd.read_csv(CAMPAIGN_FILE, sep=";", parse_dates=["date_fin", "date_creation"])
 
-def load_campagnes():
-    return pd.read_csv(CAMPAIGN_FILE)
 
-def save_campagnes(df):
-    df.to_csv(CAMPAIGN_FILE, index=False)
+def save_campaign(df):
+    df.to_csv(CAMPAIGN_FILE, sep=";", index=False)
+
+
+def add_campaign(nom, desc, date_fin):
+    df = load_campaigns()
+
+    new_row = {
+        "nom": nom,
+        "description": desc,
+        "date_fin": date_fin,
+        "statut": "brouillon",
+        "date_creation": date.today()
+    }
+
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    save_campaign(df)
+
+
+def update_campaign_status(index, new_status):
+    df = load_campaigns()
+    df.loc[index, "statut"] = new_status
+    save_campaign(df)
+
+
+def delete_campaign(index):
+    df = load_campaigns()
+    df = df.drop(index)
+    save_campaign(df)
 
 # =========================
 # HEADER
@@ -43,75 +76,88 @@ def save_campagnes(df):
 st.title("🛠️ InnoMeter – Administration")
 st.subheader("Gestion des campagnes de diagnostic")
 
-email_admin = st.session_state.get("user", {}).get("email", "admin")
-st.markdown(f"👋 **Bienvenue {email_admin}**")
-
-st.divider()
+st.markdown(f"👋 **Bienvenue {st.session_state.admin_email}**")
+st.markdown("---")
 
 # =========================
 # LISTE DES CAMPAGNES
 # =========================
-st.markdown("## 📋 Campagnes")
+st.markdown("### 📋 Campagnes")
 
-df_campagnes = load_campagnes()
+df_camp = load_campaigns()
 
-if df_campagnes.empty:
+if df_camp.empty:
     st.info("Aucune campagne à afficher.")
 else:
-    st.dataframe(df_campagnes, use_container_width=True)
+    for idx, row in df_camp.iterrows():
+        with st.container(border=True):
+            col1, col2, col3, col4 = st.columns([4, 2, 2, 2])
 
-st.divider()
+            col1.markdown(f"**{row['nom']}**")
+            col1.markdown(row["description"])
+
+            col2.markdown(f"📅 Fin : {row['date_fin'].date()}")
+            col3.markdown(f"📌 Statut : **{row['statut']}**")
+
+            # Actions
+            with col4:
+                if row["statut"] == "brouillon":
+                    if st.button("🚀 Publier", key=f"pub_{idx}"):
+                        update_campaign_status(idx, "publiée")
+                        st.rerun()
+
+                    if st.button("🗑️ Supprimer", key=f"del_{idx}"):
+                        delete_campaign(idx)
+                        st.rerun()
+
+                elif row["statut"] == "publiée":
+                    if st.button("📦 Archiver", key=f"arch_{idx}"):
+                        update_campaign_status(idx, "archivée")
+                        st.rerun()
 
 # =========================
-# FORMULAIRE CREATION
+# CREATION CAMPAGNE
 # =========================
+st.markdown("---")
 st.markdown("## ➕ Créer une nouvelle campagne")
 
-with st.form("form_create_campaign", clear_on_submit=True):
-
-    nom = st.text_input(
+with st.form("create_campaign"):
+    camp_nom = st.text_input(
         "Nom de la campagne",
-        placeholder="Ex: 2025/T1"
+        key="camp_nom"
     )
 
-    description = st.text_area(
+    camp_desc = st.text_area(
         "Description",
-        placeholder="Description de la campagne"
+        key="camp_desc"
     )
 
-    date_fin = st.date_input(
+    camp_date_fin = st.date_input(
         "Date de fin de la campagne",
         min_value=date.today(),
-        value=date.today()
+        key="camp_date_fin"
     )
 
-    submitted = st.form_submit_button("Créer la campagne")
+    submit = st.form_submit_button("Créer la campagne")
 
 # =========================
-# TRAITEMENT SUBMIT
+# TRAITEMENT FORMULAIRE
 # =========================
-if submitted:
-
-    if not nom.strip():
+if submit:
+    if not camp_nom.strip():
         st.error("❌ Le nom de la campagne est obligatoire.")
-        st.stop()
+    else:
+        add_campaign(
+            nom=camp_nom.strip(),
+            desc=camp_desc.strip(),
+            date_fin=camp_date_fin
+        )
 
-    new_campaign = {
-        "id_campagne": str(uuid.uuid4())[:8],
-        "nom": nom.strip(),
-        "description": description.strip(),
-        "date_creation": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "date_fin": date_fin.strftime("%Y-%m-%d"),
-        "statut": "Brouillon"
-    }
+        st.success("✅ Campagne créée avec succès")
 
-    df_campagnes = load_campagnes()
-    df_campagnes = pd.concat(
-        [df_campagnes, pd.DataFrame([new_campaign])],
-        ignore_index=True
-    )
+        # Reset propre
+        st.session_state.camp_nom = ""
+        st.session_state.camp_desc = ""
+        st.session_state.camp_date_fin = date.today()
 
-    save_campagnes(df_campagnes)
-
-    st.success("✅ Campagne créée avec succès.")
-    st.rerun()
+        st.rerun()
